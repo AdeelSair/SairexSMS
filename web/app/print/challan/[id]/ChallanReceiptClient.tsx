@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 interface ChallanProps {
@@ -26,19 +25,70 @@ export default function ChallanReceiptClient({ challan }: ChallanProps) {
 
   // --- ACTION 1: Download PDF ---
   const handleDownloadPDF = async () => {
-    const element = printRef.current;
-    if (!element) return;
-
-    // Use html2canvas to take a snapshot of the DOM element
-    const canvas = await html2canvas(element, { scale: 2 });
-    const data = canvas.toDataURL('image/png');
-
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgProperties = pdf.getImageProperties(data);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProperties.height * pdfWidth) / imgProperties.width;
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const left = 15;
+    const right = pageWidth - 15;
+    let y = 20;
 
-    pdf.addImage(data, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.text(challan.orgName, left, y);
+    y += 6;
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.text(challan.campusName, left, y);
+    y += 10;
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(16);
+    pdf.text('FEE CHALLAN', right, 20, { align: 'right' });
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.text(`No: ${challan.challanNo}`, right, 26, { align: 'right' });
+
+    pdf.setLineWidth(0.3);
+    pdf.line(left, 32, right, 32);
+    y = 42;
+
+    pdf.setFontSize(11);
+    pdf.text(`Student: ${challan.studentName}`, left, y);
+    y += 6;
+    pdf.text(`Admission No: ${challan.admissionNo}`, left, y);
+    y += 6;
+    pdf.text(`Grade: ${challan.grade}`, left, y);
+
+    let yRight = 42;
+    pdf.text(`Issue Date: ${challan.issueDate}`, right, yRight, { align: 'right' });
+    yRight += 6;
+    pdf.text(`Due Date: ${challan.dueDate}`, right, yRight, { align: 'right' });
+    yRight += 6;
+    pdf.text(`Status: ${challan.status}`, right, yRight, { align: 'right' });
+
+    y = 68;
+    pdf.setLineWidth(0.2);
+    pdf.line(left, y, right, y);
+    y += 8;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Description', left, y);
+    pdf.text(`Amount (${challan.currency})`, right, y, { align: 'right' });
+    y += 4;
+    pdf.line(left, y, right, y);
+
+    y += 8;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Total Dues', left, y);
+    pdf.text(`${challan.totalAmount}`, right, y, { align: 'right' });
+
+    y += 8;
+    pdf.line(left, y, right, y);
+    y += 8;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    pdf.text('Total Payable', left, y);
+    pdf.text(`${challan.totalAmount} ${challan.currency}`, right, y, { align: 'right' });
+
     pdf.save(`SAIREX_${challan.challanNo}.pdf`);
   };
 
@@ -69,7 +119,7 @@ export default function ChallanReceiptClient({ challan }: ChallanProps) {
 
       if (response.ok) alert("Challan emailed successfully!");
       else alert("Failed to send email.");
-    } catch (error) {
+    } catch {
       alert("Error sending email.");
     } finally {
       setIsEmailing(false);

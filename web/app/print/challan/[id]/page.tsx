@@ -1,12 +1,18 @@
-import prisma from '@/lib/prisma'; // Adjust this path to your Prisma client
+import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import ChallanReceiptClient from './ChallanReceiptClient';
 
-export default async function ChallanReceiptPage({ params }: { params: { id: string } }) {
+export default async function ChallanReceiptPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const challanId = Number.parseInt(id, 10);
+  if (Number.isNaN(challanId)) {
+    notFound();
+  }
+
   // 1. Fetch real data based on your exact schema
   const challanData = await prisma.feeChallan.findUnique({
     where: { 
-      id: parseInt(params.id, 10) 
+      id: challanId
     },
     include: {
       student: true,
@@ -24,8 +30,8 @@ export default async function ChallanReceiptPage({ params }: { params: { id: str
   // Converting Prisma Decimals to strings/numbers for safe client-side rendering
   const formattedChallan = {
     challanNo: challanData.challanNo,
-    issueDate: challanData.issueDate.toLocaleDateString(),
-    dueDate: challanData.dueDate.toLocaleDateString(),
+    issueDate: challanData.issueDate.toLocaleDateString('en-PK'),
+    dueDate: challanData.dueDate.toLocaleDateString('en-PK'),
     totalAmount: Number(challanData.totalAmount),
     status: challanData.status,
     studentName: challanData.student.fullName,
