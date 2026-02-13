@@ -21,15 +21,37 @@ export default function CampusesPage() {
     fetchData();
   }, []);
 
+  const parseArrayResponse = async (res: Response) => {
+    const text = await res.text();
+    if (!text) return [];
+    try {
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  };
+
   const fetchData = async () => {
-    const [orgRes, regRes, camRes] = await Promise.all([
-      fetch('/api/organizations'),
-      fetch('/api/regions'),
-      fetch('/api/campuses')
-    ]);
-    setOrgs(await orgRes.json());
-    setRegions(await regRes.json());
-    setCampuses(await camRes.json());
+    try {
+      const [orgRes, regRes, camRes] = await Promise.all([
+        fetch('/api/organizations'),
+        fetch('/api/regions'),
+        fetch('/api/campuses')
+      ]);
+      const [orgData, regData, camData] = await Promise.all([
+        parseArrayResponse(orgRes),
+        parseArrayResponse(regRes),
+        parseArrayResponse(camRes),
+      ]);
+      setOrgs(orgData);
+      setRegions(regData);
+      setCampuses(camData);
+    } catch {
+      setOrgs([]);
+      setRegions([]);
+      setCampuses([]);
+    }
   };
 
   const handleAddCampus = async (e: React.FormEvent) => {
