@@ -10,17 +10,22 @@
   },
   "dependencies": {
     "@prisma/client": "^5.17.0",
+    "axios": "^1.13.5",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.1.0",
     "next": "16.1.6",
+    "node-cron": "^4.2.1",
     "nodemailer": "^8.0.1",
+    "qrcode-terminal": "^0.12.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "whatsapp-web.js": "^1.34.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^7.0.9",
+    "@types/qrcode-terminal": "^0.12.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
