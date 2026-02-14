@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from "next/navigation";
 
 export default function FinancePage() {
+  const searchParams = useSearchParams();
+
   // --- UI STATE ---
   const [activeTab, setActiveTab] = useState<'HEADS' | 'STRUCTURES' | 'CHALLANS'>('HEADS');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,6 +40,13 @@ export default function FinancePage() {
     billingMonth: 'March',
     dueDate: ''
   });
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "heads") setActiveTab("HEADS");
+    if (tab === "structures") setActiveTab("STRUCTURES");
+    if (tab === "challans") setActiveTab("CHALLANS");
+  }, [searchParams]);
 
   // --- FETCH DATA ---
   useEffect(() => {
@@ -240,7 +250,7 @@ export default function FinancePage() {
                 <th className="px-6 py-4 font-semibold text-slate-700">Due Date</th>
                 <th className="px-6 py-4 font-semibold text-slate-700">Amount</th>
                 <th className="px-6 py-4 font-semibold text-slate-700">Status</th>
-                <th className="px-6 py-4 font-semibold text-slate-700 text-right">Action</th>
+                <th className="px-6 py-4 font-semibold text-slate-700 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-900">
@@ -262,19 +272,30 @@ export default function FinancePage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {challan.status !== 'PAID' ? (
-                      <button 
-                        onClick={() => {
-                          setSelectedChallan(challan);
-                          setIsPaymentModalOpen(true);
-                        }}
-                        className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                    <div className="inline-flex items-center gap-2">
+                      <a
+                        href={`/admin/finance/challans/${challan.id}/print`}
+                        className="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-700 rounded border hover:bg-blue-600 hover:text-white transition-colors text-xs font-medium"
                       >
-                        Receive Payment
-                      </button>
-                    ) : (
-                      <span className="text-slate-400 text-xs italic">Cleared</span>
-                    )}
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        Print / View
+                      </a>
+                      {challan.status !== 'PAID' ? (
+                        <button
+                          onClick={() => {
+                            setSelectedChallan(challan);
+                            setIsPaymentModalOpen(true);
+                          }}
+                          className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                        >
+                          Receive Payment
+                        </button>
+                      ) : (
+                        <span className="text-slate-400 text-xs italic">Cleared</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
