@@ -21,13 +21,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { email: credentials?.email as string },
         });
 
-        if (
-          user &&
-          (await bcrypt.compare(
-            credentials?.password as string,
-            user.password
-          ))
-        ) {
+        if (!user || !user.isActive) {
+          return null; // User not found or account is locked
+        }
+
+        const passwordValid = await bcrypt.compare(
+          credentials?.password as string,
+          user.password
+        );
+
+        if (passwordValid) {
           return {
             id: user.id.toString(),
             email: user.email,

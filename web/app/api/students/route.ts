@@ -1,42 +1,63 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-guard";
 
-// 1. GET: Fetch all students (with their campus names)
+// 1. GET: Fetch all students (tenant-scoped)
 export async function GET() {
+  const guard = await requireAuth();
+  if (guard instanceof NextResponse) return guard;
+
   try {
+    const where =
+      guard.role === "SUPER_ADMIN" ? {} : { organizationId: guard.organizationId };
+
     const students = await prisma.student.findMany({
-      include: { 
+      where,
+      include: {
         campus: true,
-        organization: true 
+        organization: true,
       },
-      orderBy: { id: 'desc' }
+      orderBy: { id: "desc" },
     });
     return NextResponse.json(students);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch students" },
+      { status: 500 }
+    );
   }
 }
 
-// 2. POST: Admit a new student
+// 2. POST: Admit a new student (tenant-scoped)
 export async function POST(request: Request) {
+  const guard = await requireAuth();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const body = await request.json();
-    
-    // Create the student in the database
+
+    const orgId =
+      guard.role === "SUPER_ADMIN" && body.organizationId
+        ? parseInt(body.organizationId)
+        : guard.organizationId;
+
     const student = await prisma.student.create({
       data: {
         fullName: body.fullName,
         admissionNo: body.admissionNo,
         grade: body.grade,
-        organizationId: parseInt(body.organizationId),
+        organizationId: orgId,
         campusId: parseInt(body.campusId),
-        feeStatus: 'Unpaid' // Default status on admission
-      }
+        feeStatus: "Unpaid",
+      },
     });
-    
+
     return NextResponse.json(student, { status: 201 });
   } catch (error) {
-    console.error('Failed to admit student:', error);
-    return NextResponse.json({ error: 'Failed to admit student' }, { status: 500 });
+    console.error("Failed to admit student:", error);
+    return NextResponse.json(
+      { error: "Failed to admit student" },
+      { status: 500 }
+    );
   }
 }

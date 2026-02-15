@@ -1,26 +1,40 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyParent } from "@/lib/notifications";
+import { requireAuth, requireRole } from "@/lib/auth-guard";
 
+// GET: Send fee reminders for challans due in 3 days (SUPER_ADMIN or ORG_ADMIN only)
 export async function GET() {
+  const guard = await requireAuth();
+  if (guard instanceof NextResponse) return guard;
+
+  const denied = requireRole(guard, "SUPER_ADMIN", "ORG_ADMIN");
+  if (denied) return denied;
+
   try {
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + 3);
 
-    // Date-only matching window: start/end of the day 3 days from now
     const startOfDay = new Date(targetDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const pendingChallans = await prisma.feeChallan.findMany({
-      where: {
-        status: "UNPAID",
-        dueDate: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
+    // Tenant-scoped: only send reminders for the user's org (SUPER_ADMIN sees all)
+    const where: any = {
+      status: "UNPAID",
+      dueDate: {
+        gte: startOfDay,
+        lte: endOfDay,
       },
+    };
+
+    if (guard.role !== "SUPER_ADMIN") {
+      where.organizationId = guard.organizationId;
+    }
+
+    const pendingChallans = await prisma.feeChallan.findMany({
+      where,
       include: { student: true },
     });
 
@@ -56,6 +70,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Cron reminder error:", error);
-    return NextResponse.json({ error: "Failed to send reminders" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to send reminders" },
+      { status: 500 }
+    );
   }
 }

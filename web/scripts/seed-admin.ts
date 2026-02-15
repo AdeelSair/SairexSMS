@@ -28,10 +28,10 @@ async function main() {
   const defaultPassword = "Admin@123";
   const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
-  // 3. Upsert the SUPER_ADMIN user
+  // 3. Upsert the SUPER_ADMIN user (always resets password)
   const admin = await prisma.user.upsert({
     where: { email: "admin@sairex-sms.com" },
-    update: {},
+    update: { password: hashedPassword },
     create: {
       email: "admin@sairex-sms.com",
       password: hashedPassword,

@@ -17,6 +17,15 @@ export default function Home() {
         </h1>
       </div>
 
+      <div className="mt-8 flex gap-4">
+        <Link href="/signup" className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors">
+          Get Started — Free
+        </Link>
+        <Link href="/login" className="px-6 py-3 bg-white hover:bg-gray-50 text-blue-900 font-medium rounded-lg border border-gray-300 transition-colors">
+          Sign In
+        </Link>
+      </div>
+
       <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-3 lg:text-left mt-12 gap-5">
         
         {/* Card 1: Admin Login */}
