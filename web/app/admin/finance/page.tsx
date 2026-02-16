@@ -1,45 +1,228 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useForm } from "react-hook-form";
 import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { Plus, Zap, Printer } from "lucide-react";
+import Link from "next/link";
+
+import { api } from "@/lib/api-client";
+import {
+  SxPageHeader,
+  SxButton,
+  SxStatusBadge,
+  SxAmount,
+  SxDataTable,
+  type SxColumn,
+} from "@/components/sx";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+/* ── Types ─────────────────────────────────────────────────── */
+
+interface Org {
+  id: string;
+  organizationName: string;
+}
+
+interface CampusRef {
+  id: number;
+  name: string;
+  organizationId: string;
+}
+
+interface FeeHead {
+  id: number;
+  name: string;
+  type: string;
+  organizationId: string;
+  organization?: { id: string; organizationName: string };
+}
+
+interface FeeStructure {
+  id: number;
+  name: string;
+  amount: string | number;
+  frequency: string;
+  applicableGrade: string | null;
+  organizationId: string;
+  campusId: number;
+  feeHead?: { id: number; name: string };
+  campus?: { id: number; name: string };
+}
+
+interface Challan {
+  id: number;
+  challanNo: string;
+  issueDate: string;
+  dueDate: string;
+  totalAmount: string | number;
+  paidAmount: string | number;
+  status: string;
+  paymentMethod: string | null;
+  student: { id: number; fullName: string };
+  campus: { id: number; name: string };
+}
+
+type ActiveTab = "HEADS" | "STRUCTURES" | "CHALLANS";
+
+/* ── Form types ────────────────────────────────────────────── */
+
+interface HeadFormValues {
+  name: string;
+  type: string;
+  organizationId: string;
+}
+
+interface StructureFormValues {
+  name: string;
+  amount: string;
+  frequency: string;
+  applicableGrade: string;
+  organizationId: string;
+  campusId: string;
+  feeHeadId: string;
+}
+
+interface GeneratorFormValues {
+  organizationId: string;
+  campusId: string;
+  targetGrade: string;
+  billingMonth: string;
+  dueDate: string;
+}
+
+interface PaymentFormValues {
+  paymentMethod: string;
+}
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const FREQUENCIES = [
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "BI_MONTHLY", label: "Bi-Monthly" },
+  { value: "QUARTERLY", label: "Quarterly" },
+  { value: "HALF_YEARLY", label: "Half-Yearly" },
+  { value: "ANNUALLY", label: "Annually" },
+  { value: "ONCE", label: "Once" },
+];
+
+/* ── Column definitions ────────────────────────────────────── */
+
+const headColumns: SxColumn<FeeHead>[] = [
+  {
+    key: "name",
+    header: "Category Name",
+    render: (row) => <span className="font-medium">{row.name}</span>,
+  },
+  {
+    key: "type",
+    header: "Type",
+    render: (row) => (
+      <SxStatusBadge variant={row.type === "RECURRING" ? "info" : "warning"}>
+        {row.type}
+      </SxStatusBadge>
+    ),
+  },
+  {
+    key: "organization",
+    header: "Organization",
+    render: (row) => (
+      <span className="text-muted-foreground">
+        {row.organization?.organizationName}
+      </span>
+    ),
+  },
+];
+
+const structureColumns: SxColumn<FeeStructure>[] = [
+  {
+    key: "name",
+    header: "Rule Name",
+    render: (row) => (
+      <div>
+        <div className="font-medium">{row.name}</div>
+        {row.applicableGrade && (
+          <div className="text-xs text-muted-foreground">
+            Grade: {row.applicableGrade}
+          </div>
+        )}
+      </div>
+    ),
+  },
+  {
+    key: "amount",
+    header: "Amount",
+    numeric: true,
+    mono: true,
+    render: (row) => (
+      <div>
+        <SxAmount value={Number(row.amount)} />
+        <div className="text-xs text-muted-foreground">{row.frequency}</div>
+      </div>
+    ),
+  },
+  {
+    key: "feeHead",
+    header: "Category",
+    render: (row) => row.feeHead?.name ?? "—",
+  },
+  {
+    key: "campus",
+    header: "Campus",
+    render: (row) => (
+      <span className="text-muted-foreground">{row.campus?.name}</span>
+    ),
+  },
+];
+
+/* ── Page component ────────────────────────────────────────── */
 
 export default function FinancePage() {
   const searchParams = useSearchParams();
 
-  // --- UI STATE ---
-  const [activeTab, setActiveTab] = useState<'HEADS' | 'STRUCTURES' | 'CHALLANS'>('HEADS');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("HEADS");
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [campuses, setCampuses] = useState<CampusRef[]>([]);
+  const [heads, setHeads] = useState<FeeHead[]>([]);
+  const [structures, setStructures] = useState<FeeStructure[]>([]);
+  const [challans, setChallans] = useState<Challan[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Payment State
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedChallan, setSelectedChallan] = useState<any>(null);
-  const [paymentMethod, setPaymentMethod] = useState('CASH');
-  
-  // --- DATA STATE ---
-  const [orgs, setOrgs] = useState<any[]>([]);
-  const [campuses, setCampuses] = useState<any[]>([]);
-  const [heads, setHeads] = useState<any[]>([]);
-  const [structures, setStructures] = useState<any[]>([]);
+  // Dialog state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [selectedChallan, setSelectedChallan] = useState<Challan | null>(null);
 
-  // New State for Challans
-  const [challans, setChallans] = useState<any[]>([]);
-
-  // --- FORM STATE ---
-  const [headForm, setHeadForm] = useState({ name: '', type: 'RECURRING', organizationId: '' });
-  const [structForm, setStructForm] = useState({ 
-    name: '', amount: '', frequency: 'MONTHLY', applicableGrade: '', 
-    organizationId: '', campusId: '', feeHeadId: '' 
-  });
-
-  // New Form for Generator
-  const [generatorForm, setGeneratorForm] = useState({
-    organizationId: '',
-    campusId: '',
-    targetGrade: '',
-    billingMonth: 'March',
-    dueDate: ''
-  });
+  /* ── Sync tab from URL ─────────────────────────────────── */
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -48,486 +231,880 @@ export default function FinancePage() {
     if (tab === "challans") setActiveTab("CHALLANS");
   }, [searchParams]);
 
-  // --- FETCH DATA ---
-  useEffect(() => {
-    fetchData();
+  /* ── Fetch data ────────────────────────────────────────── */
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [o, c, h, s, ch] = await Promise.all([
+      api.get<Org[]>("/api/organizations"),
+      api.get<CampusRef[]>("/api/campuses"),
+      api.get<FeeHead[]>("/api/finance/heads"),
+      api.get<FeeStructure[]>("/api/finance/structures"),
+      api.get<Challan[]>("/api/finance/challans"),
+    ]);
+    if (o.ok) setOrgs(o.data);
+    if (c.ok) setCampuses(c.data);
+    if (h.ok) setHeads(h.data);
+    if (s.ok) setStructures(s.data);
+    if (ch.ok) setChallans(ch.data);
+    setLoading(false);
   }, []);
 
-  const fetchData = async () => {
-    const [o, c, h, s, ch] = await Promise.all([
-      fetch('/api/organizations').then(res => res.json()),
-      fetch('/api/campuses').then(res => res.json()),
-      fetch('/api/finance/heads').then(res => res.json()),
-      fetch('/api/finance/structures').then(res => res.json()),
-      fetch('/api/finance/challans').then(res => res.json())
-    ]);
-    setOrgs(o); setCampuses(c); setHeads(h); setStructures(s); setChallans(ch);
-  };
-
-  // --- SUBMIT HANDLERS ---
-  const handleHeadSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    await fetch('/api/finance/heads', {
-      method: 'POST', body: JSON.stringify(headForm), headers: {'Content-Type': 'application/json'}
-    });
-    setIsModalOpen(false);
-    setHeadForm({ name: '', type: 'RECURRING', organizationId: '' });
+  useEffect(() => {
     fetchData();
-    setIsLoading(false);
-  };
+  }, [fetchData]);
 
-  const handleStructureSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    await fetch('/api/finance/structures', {
-      method: 'POST', body: JSON.stringify(structForm), headers: {'Content-Type': 'application/json'}
-    });
-    setIsModalOpen(false);
-    setStructForm({ name: '', amount: '', frequency: 'MONTHLY', applicableGrade: '', organizationId: '', campusId: '', feeHeadId: '' });
-    fetchData();
-    setIsLoading(false);
-  };
+  /* ── Challan columns (depends on state) ────────────────── */
 
-  const handleGenerateChallans = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    try {
-      const res = await fetch('/api/finance/challans', {
-        method: 'POST', body: JSON.stringify(generatorForm), headers: {'Content-Type': 'application/json'}
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        alert(`✅ ${data.message}`);
-        setIsModalOpen(false);
-        fetchData(); // Refresh the list to show new bills
-      } else {
-        alert(`❌ Error: ${data.error}`);
-      }
-    } catch (err) {
-      alert("System Error during generation.");
-    } finally {
-      setIsLoading(false);
+  const challanColumns: SxColumn<Challan>[] = useMemo(
+    () => [
+      {
+        key: "challanNo",
+        header: "Challan No.",
+        mono: true,
+        render: (row) => (
+          <span className="font-data text-xs font-bold text-primary">
+            {row.challanNo}
+          </span>
+        ),
+      },
+      {
+        key: "student",
+        header: "Student",
+        render: (row) => (
+          <div>
+            <div className="font-medium">{row.student?.fullName}</div>
+            <div className="text-xs text-muted-foreground">
+              {row.campus?.name}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: "dueDate",
+        header: "Due Date",
+        render: (row) => (
+          <span className="text-muted-foreground">
+            {new Date(row.dueDate).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        key: "totalAmount",
+        header: "Amount",
+        numeric: true,
+        mono: true,
+        render: (row) => <SxAmount value={Number(row.totalAmount)} />,
+      },
+      {
+        key: "status",
+        header: "Status",
+        render: (row) => <SxStatusBadge feeStatus={row.status} />,
+      },
+      {
+        key: "actions",
+        header: "",
+        render: (row) => (
+          <div className="flex items-center justify-end gap-2">
+            <SxButton sxVariant="ghost" size="sm" asChild>
+              <Link href={`/admin/finance/challans/${row.id}/print`}>
+                <Printer size={14} />
+                Print
+              </Link>
+            </SxButton>
+            {row.status !== "PAID" ? (
+              <SxButton
+                sxVariant="primary"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedChallan(row);
+                  setIsPaymentOpen(true);
+                }}
+              >
+                Receive
+              </SxButton>
+            ) : (
+              <span className="text-xs italic text-muted-foreground">
+                Cleared
+              </span>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
+
+  /* ── Head form ─────────────────────────────────────────── */
+
+  const headForm = useForm<HeadFormValues>({
+    defaultValues: { name: "", type: "RECURRING", organizationId: "" },
+  });
+
+  const onHeadSubmit = async (data: HeadFormValues) => {
+    const result = await api.post<FeeHead>("/api/finance/heads", data);
+    if (result.ok) {
+      toast.success("Fee category created");
+      setIsCreateOpen(false);
+      headForm.reset();
+      fetchData();
+    } else {
+      toast.error(result.error);
     }
   };
 
-  const handleReceivePayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    try {
-      const res = await fetch('/api/finance/challans', {
-        method: 'PUT', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          challanId: selectedChallan.id, 
-          paymentMethod: paymentMethod 
-        })
-      });
-      
-      if (res.ok) {
-        alert('✅ Payment Received Successfully!');
-        setIsPaymentModalOpen(false);
-        setSelectedChallan(null);
-        fetchData(); // Refresh to show it as PAID
-      } else {
-        alert('❌ Error processing payment.');
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+  /* ── Structure form ────────────────────────────────────── */
+
+  const structForm = useForm<StructureFormValues>({
+    defaultValues: {
+      name: "",
+      amount: "",
+      frequency: "MONTHLY",
+      applicableGrade: "",
+      organizationId: "",
+      campusId: "",
+      feeHeadId: "",
+    },
+  });
+
+  const structOrgId = structForm.watch("organizationId");
+
+  const structCampusList = useMemo(
+    () =>
+      structOrgId
+        ? campuses.filter((c) => c.organizationId === structOrgId)
+        : [],
+    [campuses, structOrgId],
+  );
+
+  const structHeadList = useMemo(
+    () =>
+      structOrgId
+        ? heads.filter((h) => h.organizationId === structOrgId)
+        : [],
+    [heads, structOrgId],
+  );
+
+  const onStructSubmit = async (data: StructureFormValues) => {
+    const result = await api.post<FeeStructure>(
+      "/api/finance/structures",
+      data,
+    );
+    if (result.ok) {
+      toast.success("Pricing rule created");
+      setIsCreateOpen(false);
+      structForm.reset();
+      fetchData();
+    } else {
+      toast.error(result.error);
     }
   };
+
+  /* ── Generator form ────────────────────────────────────── */
+
+  const genForm = useForm<GeneratorFormValues>({
+    defaultValues: {
+      organizationId: "",
+      campusId: "",
+      targetGrade: "",
+      billingMonth: "March",
+      dueDate: "",
+    },
+  });
+
+  const genOrgId = genForm.watch("organizationId");
+
+  const genCampusList = useMemo(
+    () =>
+      genOrgId ? campuses.filter((c) => c.organizationId === genOrgId) : [],
+    [campuses, genOrgId],
+  );
+
+  const onGenerateSubmit = async (data: GeneratorFormValues) => {
+    const result = await api.post<{ message: string }>(
+      "/api/finance/challans",
+      data,
+    );
+    if (result.ok) {
+      toast.success(result.data.message);
+      setIsCreateOpen(false);
+      genForm.reset();
+      fetchData();
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  /* ── Payment form ──────────────────────────────────────── */
+
+  const payForm = useForm<PaymentFormValues>({
+    defaultValues: { paymentMethod: "CASH" },
+  });
+
+  const onPaymentSubmit = async (data: PaymentFormValues) => {
+    if (!selectedChallan) return;
+    const result = await api.put<{ message: string }>("/api/finance/challans", {
+      challanId: selectedChallan.id,
+      paymentMethod: data.paymentMethod,
+    });
+    if (result.ok) {
+      toast.success("Payment received successfully");
+      setIsPaymentOpen(false);
+      setSelectedChallan(null);
+      payForm.reset();
+      fetchData();
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  /* ── Dialog close handlers ─────────────────────────────── */
+
+  const handleCreateClose = () => {
+    setIsCreateOpen(false);
+    headForm.reset();
+    structForm.reset();
+    genForm.reset();
+  };
+
+  const handlePaymentClose = () => {
+    setIsPaymentOpen(false);
+    setSelectedChallan(null);
+    payForm.reset();
+  };
+
+  /* ── Action button label ───────────────────────────────── */
+
+  const actionLabel =
+    activeTab === "HEADS"
+      ? "Add Fee Category"
+      : activeTab === "STRUCTURES"
+        ? "Add Pricing Rule"
+        : "Generate Bills";
+
+  const actionIcon =
+    activeTab === "CHALLANS" ? <Zap size={16} /> : <Plus size={16} />;
+
+  /* ── Render ────────────────────────────────────────────── */
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Finance Module</h1>
-          <p className="text-slate-500">Manage Categories and Pricing Rules.</p>
-        </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all"
-        >
-          {activeTab === 'HEADS' && '+ Add Fee Category'}
-          {activeTab === 'STRUCTURES' && '+ Add Pricing Rule'}
-          {activeTab === 'CHALLANS' && '⚡ Generate Bills'}
-        </button>
-      </div>
+    <div className="space-y-6">
+      <SxPageHeader
+        title="Finance Module"
+        subtitle="Manage fee categories, pricing rules, and billing"
+        actions={
+          <SxButton
+            sxVariant="primary"
+            icon={actionIcon}
+            onClick={() => setIsCreateOpen(true)}
+          >
+            {actionLabel}
+          </SxButton>
+        }
+      />
 
-      {/* --- TAB NAVIGATION --- */}
-      <div className="flex space-x-6 mb-6 border-b border-slate-200">
-        <button onClick={() => setActiveTab('HEADS')} className={`pb-3 font-medium transition-colors ${activeTab === 'HEADS' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>
-          1. Fee Categories
-        </button>
-        <button onClick={() => setActiveTab('STRUCTURES')} className={`pb-3 font-medium transition-colors ${activeTab === 'STRUCTURES' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>
-          2. Pricing Rules
-        </button>
-        <button onClick={() => setActiveTab('CHALLANS')} className={`pb-3 font-medium transition-colors ${activeTab === 'CHALLANS' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>
-          3. Generate Bills
-        </button>
-      </div>
+      {/* ── Tabs ───────────────────────────────────────────── */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(val) => setActiveTab(val as ActiveTab)}
+      >
+        <TabsList>
+          <TabsTrigger value="HEADS">1. Fee Categories</TabsTrigger>
+          <TabsTrigger value="STRUCTURES">2. Pricing Rules</TabsTrigger>
+          <TabsTrigger value="CHALLANS">3. Bills</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      {/* --- CONTENT: FEE HEADS TABLE --- */}
-      {activeTab === 'HEADS' && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold text-slate-700">Category Name</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Type</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Organization</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-900">
-              {heads.map((head) => (
-                <tr key={head.id} className="hover:bg-slate-50/50">
-                  <td className="px-6 py-4 font-medium">{head.name}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${head.type === 'RECURRING' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                      {head.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">{head.organization?.name}</td>
-                </tr>
-              ))}
-              {heads.length === 0 && (
-                <tr><td colSpan={3} className="px-6 py-8 text-center text-slate-400">No Categories found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* ── Tab content ────────────────────────────────────── */}
+      {activeTab === "HEADS" && (
+        <SxDataTable
+          columns={headColumns}
+          data={heads as unknown as Record<string, unknown>[]}
+          loading={loading}
+          emptyMessage="No fee categories found."
+        />
       )}
 
-      {/* --- CONTENT: PRICING RULES TABLE --- */}
-      {activeTab === 'STRUCTURES' && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold text-slate-700">Rule Name</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Amount</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Category</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Campus</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-900">
-              {structures.map((st) => (
-                <tr key={st.id} className="hover:bg-slate-50/50">
-                  <td className="px-6 py-4">
-                    <div className="font-medium">{st.name}</div>
-                    <div className="text-xs text-slate-400 mt-1">Grade: {st.applicableGrade || 'All Grades'}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-green-600 font-mono">{st.amount} PKR</div>
-                    <div className="text-xs text-slate-500">{st.frequency}</div>
-                  </td>
-                  <td className="px-6 py-4">{st.feeHead?.name}</td>
-                  <td className="px-6 py-4 text-slate-500">{st.campus?.name}</td>
-                </tr>
-              ))}
-              {structures.length === 0 && (
-                <tr><td colSpan={4} className="px-6 py-8 text-center text-slate-400">No Pricing Rules found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {activeTab === "STRUCTURES" && (
+        <SxDataTable
+          columns={structureColumns}
+          data={structures as unknown as Record<string, unknown>[]}
+          loading={loading}
+          emptyMessage="No pricing rules found."
+        />
       )}
 
-      {/* --- CONTENT: CHALLANS (GENERATED BILLS) --- */}
-      {activeTab === 'CHALLANS' && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold text-slate-700">Challan No.</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Student Name</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Due Date</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Amount</th>
-                <th className="px-6 py-4 font-semibold text-slate-700">Status</th>
-                <th className="px-6 py-4 font-semibold text-slate-700 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-900">
-              {challans.map((challan) => (
-                <tr key={challan.id} className="hover:bg-slate-50/50">
-                  <td className="px-6 py-4 font-mono text-xs text-blue-600 font-bold">{challan.challanNo}</td>
-                  <td className="px-6 py-4">
-                    <div className="font-medium">{challan.student?.fullName}</div>
-                    <div className="text-xs text-slate-400">{challan.campus?.name}</div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">{new Date(challan.dueDate).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 font-mono font-bold text-slate-700">{challan.totalAmount} PKR</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                      challan.status === 'PAID' ? 'bg-green-100 text-green-700' : 
-                      challan.status === 'OVERDUE' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
-                    }`}>
-                      {challan.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="inline-flex items-center gap-2">
-                      <a
-                        href={`/admin/finance/challans/${challan.id}/print`}
-                        className="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-700 rounded border hover:bg-blue-600 hover:text-white transition-colors text-xs font-medium"
-                      >
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        Print / View
-                      </a>
-                      {challan.status !== 'PAID' ? (
-                        <button
-                          onClick={() => {
-                            setSelectedChallan(challan);
-                            setIsPaymentModalOpen(true);
-                          }}
-                          className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
-                        >
-                          Receive Payment
-                        </button>
-                      ) : (
-                        <span className="text-slate-400 text-xs italic">Cleared</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {challans.length === 0 && (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-400">No generated bills found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {activeTab === "CHALLANS" && (
+        <SxDataTable
+          columns={challanColumns}
+          data={challans as unknown as Record<string, unknown>[]}
+          loading={loading}
+          emptyMessage="No generated bills found."
+        />
       )}
 
-      {/* --- DYNAMIC MODAL --- */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm overflow-y-auto pt-20 pb-10">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-slate-800 mb-4">
-              {activeTab === 'HEADS' && 'New Fee Category'}
-              {activeTab === 'STRUCTURES' && 'New Pricing Rule'}
-              {activeTab === 'CHALLANS' && 'Generate Student Bills'}
-            </h2>
-            
-            {/* Form 1: Category */}
-            {activeTab === 'HEADS' && (
-              <form onSubmit={handleHeadSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Organization</label>
-                  <select required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none" 
-                    value={headForm.organizationId} onChange={e => setHeadForm({...headForm, organizationId: e.target.value})}>
-                    <option value="">Select Org</option>
-                    {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Category Name</label>
-                  <input required type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none" placeholder="e.g. Lab Fee"
-                    value={headForm.name} onChange={e => setHeadForm({...headForm, name: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Fee Type</label>
-                  <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                    value={headForm.type} onChange={e => setHeadForm({...headForm, type: e.target.value})}>
-                    <option value="RECURRING">Recurring (Monthly/Annual)</option>
-                    <option value="ONE_TIME">One Time</option>
-                  </select>
-                </div>
-                <div className="flex justify-end gap-3 mt-6">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600">Cancel</button>
-                  <button type="submit" disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{isLoading ? 'Saving...' : 'Save Category'}</button>
-                </div>
+      {/* ═══════════ CREATE DIALOG ═══════════ */}
+      <Dialog open={isCreateOpen} onOpenChange={(o) => !o && handleCreateClose()}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {activeTab === "HEADS" && "New Fee Category"}
+              {activeTab === "STRUCTURES" && "New Pricing Rule"}
+              {activeTab === "CHALLANS" && "Generate Student Bills"}
+            </DialogTitle>
+            <DialogDescription>
+              {activeTab === "HEADS" && "Create a new fee category for your organization."}
+              {activeTab === "STRUCTURES" && "Link a fee category to an amount for a campus."}
+              {activeTab === "CHALLANS" &&
+                "Generate invoices for students by grade. Active pricing rules are applied automatically."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* ── Form: Fee Category ─────────────────────────── */}
+          {activeTab === "HEADS" && (
+            <Form {...headForm}>
+              <form
+                onSubmit={headForm.handleSubmit(onHeadSubmit)}
+                className="space-y-4"
+              >
+                <FormField
+                  control={headForm.control}
+                  name="organizationId"
+                  rules={{ required: "Organization is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select org" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {orgs.map((o) => (
+                            <SelectItem key={o.id} value={o.id}>
+                              {o.organizationName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={headForm.control}
+                  name="name"
+                  rules={{ required: "Category name is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Lab Fee" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={headForm.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fee Type</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="RECURRING">
+                            Recurring (Monthly/Annual)
+                          </SelectItem>
+                          <SelectItem value="ONE_TIME">One Time</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <DialogFooter>
+                  <SxButton
+                    type="button"
+                    sxVariant="outline"
+                    onClick={handleCreateClose}
+                  >
+                    Cancel
+                  </SxButton>
+                  <SxButton
+                    type="submit"
+                    sxVariant="primary"
+                    loading={headForm.formState.isSubmitting}
+                  >
+                    Save Category
+                  </SxButton>
+                </DialogFooter>
               </form>
-            )}
+            </Form>
+          )}
 
-            {/* Form 2: Pricing Rule */}
-            {activeTab === 'STRUCTURES' && (
-              <form onSubmit={handleStructureSubmit} className="space-y-4">
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
-                  <div className="text-xs font-semibold text-slate-500 uppercase">Target Location</div>
-                  <select required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none text-sm"
-                    value={structForm.organizationId} onChange={e => setStructForm({...structForm, organizationId: e.target.value, campusId: '', feeHeadId: ''})}>
-                    <option value="">1. Select Organization</option>
-                    {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
-                  <select required disabled={!structForm.organizationId} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none text-sm disabled:bg-slate-100 disabled:text-slate-400"
-                    value={structForm.campusId} onChange={e => setStructForm({...structForm, campusId: e.target.value})}>
-                    <option value="">2. Select Campus</option>
-                    {campuses.filter(c => c.organizationId.toString() === structForm.organizationId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Fee Category</label>
-                  <select required disabled={!structForm.organizationId} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none disabled:bg-slate-100 disabled:text-slate-400"
-                    value={structForm.feeHeadId} onChange={e => setStructForm({...structForm, feeHeadId: e.target.value})}>
-                    <option value="">Select Category</option>
-                    {heads.filter(h => h.organizationId.toString() === structForm.organizationId).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Amount (PKR)</label>
-                    <input type="number" required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none" placeholder="e.g. 5000"
-                      value={structForm.amount} onChange={e => setStructForm({...structForm, amount: e.target.value})} />
-                   </div>
-                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Frequency</label>
-                    <select 
-                      required
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                      value={structForm.frequency} 
-                      onChange={e => setStructForm({...structForm, frequency: e.target.value})}
-                    >
-                      <option value="MONTHLY">Monthly (12 times/year)</option>
-                      <option value="BI_MONTHLY">Bi-Monthly (Every 2 Months)</option>
-                      <option value="QUARTERLY">Quarterly (Every 3 Months)</option>
-                      <option value="HALF_YEARLY">Half-Yearly (Every 6 Months)</option>
-                      <option value="ANNUALLY">Annually (Once a Year)</option>
-                      <option value="ONCE">Once (Non-Recurring)</option>
-                    </select>
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Rule Name</label>
-                    <input required type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none" placeholder="e.g. Standard Tuition"
-                      value={structForm.name} onChange={e => setStructForm({...structForm, name: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Grade (Optional)</label>
-                    <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none" placeholder="e.g. Grade 10"
-                      value={structForm.applicableGrade} onChange={e => setStructForm({...structForm, applicableGrade: e.target.value})} />
-                  </div>
-                </div>
-                
-                <div className="flex justify-end gap-3 mt-6">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600">Cancel</button>
-                  <button type="submit" disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{isLoading ? 'Saving...' : 'Save Pricing Rule'}</button>
-                </div>
-              </form>
-            )}
-
-            {/* Form 3: Generate Bills Engine */}
-            {activeTab === 'CHALLANS' && (
-              <form onSubmit={handleGenerateChallans} className="space-y-4">
-                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
-                  <p className="text-sm text-blue-800 font-medium">
-                    This engine will find all students in the selected Grade and automatically generate their invoices based on active Pricing Rules.
+          {/* ── Form: Pricing Rule ─────────────────────────── */}
+          {activeTab === "STRUCTURES" && (
+            <Form {...structForm}>
+              <form
+                onSubmit={structForm.handleSubmit(onStructSubmit)}
+                className="space-y-4"
+              >
+                {/* Target location */}
+                <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Target Location
                   </p>
+                  <FormField
+                    control={structForm.control}
+                    name="organizationId"
+                    rules={{ required: "Organization is required" }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <Select
+                          value={field.value}
+                          onValueChange={(val) => {
+                            field.onChange(val);
+                            structForm.setValue("campusId", "");
+                            structForm.setValue("feeHeadId", "");
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="1. Select Organization" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {orgs.map((o) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.organizationName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={structForm.control}
+                    name="campusId"
+                    rules={{ required: "Campus is required" }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={!structOrgId}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="2. Select Campus" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {structCampusList.map((c) => (
+                              <SelectItem key={c.id} value={c.id.toString()}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Organization</label>
-                    <select required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                      value={generatorForm.organizationId} onChange={e => setGeneratorForm({...generatorForm, organizationId: e.target.value, campusId: ''})}>
-                      <option value="">Select Org</option>
-                      {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Campus</label>
-                    <select required disabled={!generatorForm.organizationId} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none disabled:bg-slate-100 disabled:text-slate-400"
-                      value={generatorForm.campusId} onChange={e => setGeneratorForm({...generatorForm, campusId: e.target.value})}>
-                      <option value="">Select Campus</option>
-                      {campuses.filter(c => c.organizationId.toString() === generatorForm.organizationId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
+                <FormField
+                  control={structForm.control}
+                  name="feeHeadId"
+                  rules={{ required: "Fee category is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fee Category</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={!structOrgId}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {structHeadList.map((h) => (
+                            <SelectItem key={h.id} value={h.id.toString()}>
+                              {h.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={structForm.control}
+                    name="amount"
+                    rules={{ required: "Amount is required" }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Amount (PKR)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder="e.g. 5000"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={structForm.control}
+                    name="frequency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Frequency</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {FREQUENCIES.map((f) => (
+                              <SelectItem key={f.value} value={f.value}>
+                                {f.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Target Grade</label>
-                    <input type="text" required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none" placeholder="e.g. Grade 10"
-                      value={generatorForm.targetGrade} onChange={e => setGeneratorForm({...generatorForm, targetGrade: e.target.value})} />
-                   </div>
-                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Billing Month</label>
-                    <select required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                      value={generatorForm.billingMonth} onChange={e => setGeneratorForm({...generatorForm, billingMonth: e.target.value})}>
-                      <option value="January">January</option>
-                      <option value="February">February</option>
-                      <option value="March">March</option>
-                      <option value="April">April</option>
-                      <option value="May">May</option>
-                      <option value="June">June</option>
-                      <option value="July">July</option>
-                      <option value="August">August</option>
-                      <option value="September">September</option>
-                      <option value="October">October</option>
-                      <option value="November">November</option>
-                      <option value="December">December</option>
-                    </select>
-                   </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={structForm.control}
+                    name="name"
+                    rules={{ required: "Rule name is required" }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Rule Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g. Standard Tuition"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={structForm.control}
+                    name="applicableGrade"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Grade (Optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. Grade 10" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
-                  <input type="date" required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                    value={generatorForm.dueDate} onChange={e => setGeneratorForm({...generatorForm, dueDate: e.target.value})} />
-                </div>
-                
-                <div className="flex justify-end gap-3 mt-6">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600">Cancel</button>
-                  <button type="submit" disabled={isLoading} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-sm">
-                    {isLoading ? 'Processing...' : 'Generate Bills Now'}
-                  </button>
-                </div>
+                <DialogFooter>
+                  <SxButton
+                    type="button"
+                    sxVariant="outline"
+                    onClick={handleCreateClose}
+                  >
+                    Cancel
+                  </SxButton>
+                  <SxButton
+                    type="submit"
+                    sxVariant="primary"
+                    loading={structForm.formState.isSubmitting}
+                  >
+                    Save Pricing Rule
+                  </SxButton>
+                </DialogFooter>
               </form>
-            )}
-          </div>
-        </div>
-      )}
+            </Form>
+          )}
 
-      {/* --- RECEIVE PAYMENT MODAL --- */}
-      {isPaymentModalOpen && selectedChallan && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
-            <h2 className="text-xl font-bold text-slate-800 mb-2">Receive Payment</h2>
-            
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
-              <p className="text-sm text-slate-500 mb-1">Student: <span className="font-bold text-slate-900">{selectedChallan.student.fullName}</span></p>
-              <p className="text-sm text-slate-500 mb-1">Challan No: <span className="font-mono text-slate-900">{selectedChallan.challanNo}</span></p>
-              <p className="text-sm text-slate-500">Amount Due: <span className="text-lg font-bold text-green-600">{selectedChallan.totalAmount} PKR</span></p>
+          {/* ── Form: Bill Generator ───────────────────────── */}
+          {activeTab === "CHALLANS" && (
+            <Form {...genForm}>
+              <form
+                onSubmit={genForm.handleSubmit(onGenerateSubmit)}
+                className="space-y-4"
+              >
+                <div className="rounded-lg border border-info/25 bg-info/10 p-3 text-sm text-info">
+                  This engine finds all students in the selected grade and
+                  generates invoices from active pricing rules.
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={genForm.control}
+                    name="organizationId"
+                    rules={{ required: "Organization is required" }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Organization</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(val) => {
+                            field.onChange(val);
+                            genForm.setValue("campusId", "");
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select org" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {orgs.map((o) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.organizationName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={genForm.control}
+                    name="campusId"
+                    rules={{ required: "Campus is required" }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Campus</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={!genOrgId}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select campus" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {genCampusList.map((c) => (
+                              <SelectItem key={c.id} value={c.id.toString()}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={genForm.control}
+                    name="targetGrade"
+                    rules={{ required: "Grade is required" }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Target Grade</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. Grade 10" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={genForm.control}
+                    name="billingMonth"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Billing Month</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {MONTHS.map((m) => (
+                              <SelectItem key={m} value={m}>
+                                {m}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={genForm.control}
+                  name="dueDate"
+                  rules={{ required: "Due date is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Due Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <DialogFooter>
+                  <SxButton
+                    type="button"
+                    sxVariant="outline"
+                    onClick={handleCreateClose}
+                  >
+                    Cancel
+                  </SxButton>
+                  <SxButton
+                    type="submit"
+                    sxVariant="primary"
+                    loading={genForm.formState.isSubmitting}
+                    icon={<Zap size={16} />}
+                  >
+                    Generate Bills
+                  </SxButton>
+                </DialogFooter>
+              </form>
+            </Form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════ PAYMENT DIALOG ═══════════ */}
+      <Dialog
+        open={isPaymentOpen}
+        onOpenChange={(o) => !o && handlePaymentClose()}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Receive Payment</DialogTitle>
+          </DialogHeader>
+
+          {selectedChallan && (
+            <div className="space-y-1 rounded-lg border bg-muted/30 p-4">
+              <p className="text-sm text-muted-foreground">
+                Student:{" "}
+                <span className="font-medium text-foreground">
+                  {selectedChallan.student?.fullName}
+                </span>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Challan:{" "}
+                <span className="font-data text-foreground">
+                  {selectedChallan.challanNo}
+                </span>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Amount:{" "}
+                <span className="text-lg font-bold text-success">
+                  <SxAmount value={Number(selectedChallan.totalAmount)} />
+                </span>
+              </p>
             </div>
+          )}
 
-            <form onSubmit={handleReceivePayment} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Method</label>
-                <select 
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
+          <Form {...payForm}>
+            <form
+              onSubmit={payForm.handleSubmit(onPaymentSubmit)}
+              className="space-y-4"
+            >
+              <FormField
+                control={payForm.control}
+                name="paymentMethod"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Payment Method</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="CASH">Cash at Counter</SelectItem>
+                        <SelectItem value="BANK_TRANSFER">
+                          Bank Transfer
+                        </SelectItem>
+                        <SelectItem value="ONLINE">Online Portal</SelectItem>
+                        <SelectItem value="CHEQUE">Cheque</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <SxButton
+                  type="button"
+                  sxVariant="outline"
+                  onClick={handlePaymentClose}
                 >
-                  <option value="CASH">Cash at Counter</option>
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="ONLINE">Online Portal</option>
-                  <option value="CHEQUE">Cheque</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-slate-600">Cancel</button>
-                <button type="submit" disabled={isLoading} className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold">
-                  {isLoading ? 'Processing...' : 'Confirm Payment'}
-                </button>
-              </div>
+                  Cancel
+                </SxButton>
+                <SxButton
+                  type="submit"
+                  sxVariant="primary"
+                  loading={payForm.formState.isSubmitting}
+                >
+                  Confirm Payment
+                </SxButton>
+              </DialogFooter>
             </form>
-          </div>
-        </div>
-      )}
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

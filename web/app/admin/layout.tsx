@@ -1,7 +1,22 @@
-import Link from "next/link";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { navigation } from "@/lib/config/theme";
+import { SidebarNav } from "./SidebarNav";
 import LogoutButton from "./LogoutButton";
+import { MobileSidebar } from "./MobileSidebar";
+
+const FOOTER_NAV_GROUPS = [
+  {
+    label: "",
+    items: [
+      {
+        label: "Change Password",
+        href: "/admin/change-password",
+        icon: "KeyRound",
+      },
+    ],
+  },
+];
 
 export default async function AdminLayout({
   children,
@@ -14,108 +29,65 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  const user = session.user as any;
+  const user = session.user as {
+    email?: string | null;
+    role?: string;
+  };
+
+  const userEmail = user.email || "";
+  const userRole = user.role?.replace("_", " ") || "Admin";
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* --- SIDEBAR (The Tabs) --- */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col">
-        <div className="p-6 border-b border-slate-700">
-          <h1 className="text-2xl font-bold text-blue-400">SAIREX SMS</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            {user.role?.replace("_", " ") || "Admin"} Console
+    <div className="flex h-screen flex-col md:flex-row">
+      {/* ── Mobile top bar ──────────────────────────────────── */}
+      <header className="flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 py-3 md:hidden">
+        <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">
+          <span>SAIREX</span>{" "}
+          <span className="text-sidebar-primary">SMS</span>
+        </h1>
+        <MobileSidebar
+          groups={navigation}
+          footerGroups={FOOTER_NAV_GROUPS}
+          userEmail={userEmail}
+          userRole={userRole}
+        />
+      </header>
+
+      {/* ── Desktop sidebar ─────────────────────────────────── */}
+      <aside className="hidden w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+        {/* Brand */}
+        <div className="border-b border-sidebar-border px-6 py-5">
+          <h1 className="text-xl font-bold tracking-tight">
+            <span className="text-sidebar-foreground">SAIREX</span>{" "}
+            <span className="text-sidebar-primary">SMS</span>
+          </h1>
+          <p className="mt-0.5 text-xs text-sidebar-foreground/50">
+            {userRole} Console
           </p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {/* Dashboard */}
-          <Link
-            href="/admin/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <span>📊</span> Dashboard
-          </Link>
-
-          {/* Core Setup */}
-          <div className="text-xs font-semibold text-slate-500 uppercase mt-6 mb-2 px-4">
-            Core Setup
-          </div>
-
-          <Link
-            href="/admin/organizations"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <span>🏢</span> Organizations
-          </Link>
-
-          <Link
-            href="/admin/regions"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <span>🗺️</span> Regional Offices
-          </Link>
-
-          <Link
-            href="/admin/campuses"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <span>🏫</span> Campuses / Schools
-          </Link>
-
-          {/* Management */}
-          <div className="text-xs font-semibold text-slate-500 uppercase mt-6 mb-2 px-4">
-            Management
-          </div>
-
-          <Link
-            href="/admin/students"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <span>🎓</span> Students
-          </Link>
-
-          <Link
-            href="/admin/finance"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <span>💰</span> Fee Module
-          </Link>
-
-          {/* Admin */}
-          <div className="text-xs font-semibold text-slate-500 uppercase mt-6 mb-2 px-4">
-            Admin
-          </div>
-
-          <Link
-            href="/admin/users"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <span>👥</span> Users & Invites
-          </Link>
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          <SidebarNav groups={navigation} />
         </nav>
 
-        {/* Footer: User info + Logout */}
-        <div className="p-4 border-t border-slate-800 space-y-2">
-          <div className="px-4">
-            <p className="text-sm text-white font-medium truncate">
-              {user.email}
+        {/* Footer: user info + actions */}
+        <div className="space-y-1 border-t border-sidebar-border p-3">
+          <div className="px-3 py-2">
+            <p className="truncate text-sm font-medium text-sidebar-foreground">
+              {userEmail}
             </p>
-            <p className="text-xs text-slate-400">
-              {user.role?.replace("_", " ")}
-            </p>
+            <p className="text-xs text-sidebar-foreground/50">{userRole}</p>
           </div>
-          <Link
-            href="/admin/change-password"
-            className="flex items-center gap-3 px-4 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
-          >
-            <span>🔑</span> Change Password
-          </Link>
+          <SidebarNav groups={FOOTER_NAV_GROUPS} />
           <LogoutButton />
         </div>
       </aside>
 
-      {/* --- MAIN CONTENT AREA (Where pages load) --- */}
-      <main className="flex-1 overflow-y-auto p-8">{children}</main>
+      {/* ── Main content area ───────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+        {children}
+      </main>
     </div>
   );
 }

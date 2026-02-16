@@ -1,119 +1,167 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { Plus, Copy, Lock, Unlock } from "lucide-react";
 
-type Org = { id: number; name: string };
-type Region = { id: number; name: string; city: string; organizationId: number };
-type Campus = { id: number; name: string; organizationId: number; regionId: number | null };
-type User = {
+import { api } from "@/lib/api-client";
+import {
+  SxPageHeader,
+  SxButton,
+  SxStatusBadge,
+  SxDataTable,
+  type SxColumn,
+} from "@/components/sx";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+
+/* ── Types ─────────────────────────────────────────────────── */
+
+interface Org {
+  id: string;
+  organizationName: string;
+}
+
+interface Region {
+  id: number;
+  name: string;
+  city: string;
+  organizationId: string;
+}
+
+interface CampusRef {
+  id: number;
+  name: string;
+  organizationId: string;
+  regionId: number | null;
+}
+
+interface User {
   id: number;
   email: string;
   role: string;
   isActive: boolean;
   campusId: number | null;
-  organization: { id: number; name: string };
+  organization: { id: string; organizationName: string };
   campus: { id: number; name: string; regionId: number | null } | null;
-};
-type Invite = {
+}
+
+interface Invite {
   id: number;
   email: string;
   role: string;
   expiresAt: string;
   createdBy: string;
   createdAt: string;
-  organization: { name: string };
+  organization: { organizationName: string };
+}
+
+interface InvitesResponse {
+  users: User[];
+  pendingInvites: Invite[];
+  organizations: Org[];
+  regions: Region[];
+  campuses: CampusRef[];
+  isSuperAdmin: boolean;
+}
+
+interface InviteFormValues {
+  email: string;
+  role: string;
+  organizationId: string;
+  regionId: string;
+  campusId: string;
+}
+
+/* ── Role badge helper ─────────────────────────────────────── */
+
+const ROLE_VARIANT: Record<string, "info" | "success" | "warning" | "default" | "muted"> = {
+  SUPER_ADMIN: "info",
+  ORG_ADMIN: "info",
+  CAMPUS_ADMIN: "success",
+  TEACHER: "warning",
+  PARENT: "muted",
 };
+
+/* ── Page component ────────────────────────────────────────── */
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [organizations, setOrganizations] = useState<Org[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
-  const [campuses, setCampuses] = useState<Campus[]>([]);
+  const [campuses, setCampuses] = useState<CampusRef[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Filter state (for the table — used by ORG_ADMIN and SUPER_ADMIN)
+  // Filter state
   const [filterRegionId, setFilterRegionId] = useState("");
   const [filterCampusId, setFilterCampusId] = useState("");
 
-  // Invite form state
-  const [showInviteForm, setShowInviteForm] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("TEACHER");
-  const [inviteOrgId, setInviteOrgId] = useState("");
-  const [inviteRegionId, setInviteRegionId] = useState("");
-  const [inviteCampusId, setInviteCampusId] = useState("");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteMessage, setInviteMessage] = useState("");
+  // Dialog
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
-  const [inviteError, setInviteError] = useState("");
-
-  // Toggle loading state per user
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
-  const fetchData = async () => {
-    try {
-      const res = await fetch("/api/invites");
-      const data = await res.json();
-      if (res.ok) {
-        setUsers(data.users || []);
-        setInvites(data.pendingInvites || []);
-        setOrganizations(data.organizations || []);
-        setRegions(data.regions || []);
-        setCampuses(data.campuses || []);
-        setIsSuperAdmin(data.isSuperAdmin || false);
-        if (data.isSuperAdmin && data.organizations?.length > 0 && !inviteOrgId) {
-          setInviteOrgId(data.organizations[0].id.toString());
-        }
-      }
-    } catch {
-      console.error("Failed to fetch users");
-    } finally {
-      setLoading(false);
+  /* ── Fetch data ────────────────────────────────────────── */
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const result = await api.get<InvitesResponse>("/api/invites");
+    if (result.ok) {
+      setUsers(result.data.users || []);
+      setInvites(result.data.pendingInvites || []);
+      setOrganizations(result.data.organizations || []);
+      setRegions(result.data.regions || []);
+      setCampuses(result.data.campuses || []);
+      setIsSuperAdmin(result.data.isSuperAdmin || false);
+    } else {
+      toast.error(result.error);
     }
-  };
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchData]);
 
-  // --- Derived filter lists ---
+  /* ── Derived filter lists ──────────────────────────────── */
 
-  // Campuses filtered by selected filter region
   const filterCampusList = useMemo(() => {
     if (!filterRegionId) return campuses;
     return campuses.filter((c) => c.regionId === parseInt(filterRegionId));
   }, [campuses, filterRegionId]);
 
-  // Campuses for the invite form (SUPER_ADMIN: by org, ORG_ADMIN: by region)
-  const inviteCampusList = useMemo(() => {
-    if (isSuperAdmin) {
-      let list = campuses;
-      if (inviteOrgId) list = list.filter((c) => c.organizationId === parseInt(inviteOrgId));
-      if (inviteRegionId) list = list.filter((c) => c.regionId === parseInt(inviteRegionId));
-      return list;
-    }
-    if (inviteRegionId) return campuses.filter((c) => c.regionId === parseInt(inviteRegionId));
-    return campuses;
-  }, [campuses, isSuperAdmin, inviteOrgId, inviteRegionId]);
-
-  // Regions for invite form (SUPER_ADMIN: filtered by selected org)
-  const inviteRegionList = useMemo(() => {
-    if (isSuperAdmin && inviteOrgId) {
-      return regions.filter((r) => r.organizationId === parseInt(inviteOrgId));
-    }
-    return regions;
-  }, [regions, isSuperAdmin, inviteOrgId]);
-
-  // --- Filtered users & invites for the table ---
   const filteredUsers = useMemo(() => {
     let list = users;
     if (filterRegionId) {
-      // Get campus IDs in this region
       const campusIds = new Set(
-        campuses.filter((c) => c.regionId === parseInt(filterRegionId)).map((c) => c.id)
+        campuses
+          .filter((c) => c.regionId === parseInt(filterRegionId))
+          .map((c) => c.id),
       );
       list = list.filter((u) => u.campusId && campusIds.has(u.campusId));
     }
@@ -123,451 +171,550 @@ export default function UsersPage() {
     return list;
   }, [users, campuses, filterRegionId, filterCampusId]);
 
-  // --- Handlers ---
+  const hasFilters = !!(filterRegionId || filterCampusId);
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setInviteError("");
-    setInviteMessage("");
-    setInviteUrl("");
-    setInviteLoading(true);
+  /* ── Invite form ───────────────────────────────────────── */
 
-    try {
-      const body: Record<string, string> = { email: inviteEmail, role: inviteRole };
-      if (isSuperAdmin && inviteOrgId) body.organizationId = inviteOrgId;
-      if (inviteCampusId) body.campusId = inviteCampusId;
+  const form = useForm<InviteFormValues>({
+    defaultValues: {
+      email: "",
+      role: "TEACHER",
+      organizationId: "",
+      regionId: "",
+      campusId: "",
+    },
+  });
 
-      const res = await fetch("/api/invites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+  const {
+    handleSubmit,
+    reset,
+    watch,
+    formState: { isSubmitting },
+  } = form;
 
-      const data = await res.json();
+  const inviteOrgId = watch("organizationId");
+  const inviteRegionId = watch("regionId");
 
-      if (!res.ok) {
-        setInviteError(data.error || "Failed to send invite.");
-      } else {
-        setInviteMessage(data.message);
-        setInviteUrl(data.inviteUrl || "");
-        setInviteEmail("");
-        setInviteRole("TEACHER");
-        setInviteRegionId("");
-        setInviteCampusId("");
-        fetchData();
-      }
-    } catch {
-      setInviteError("Something went wrong.");
-    } finally {
-      setInviteLoading(false);
+  const inviteRegionList = useMemo(() => {
+    if (isSuperAdmin && inviteOrgId) {
+      return regions.filter((r) => r.organizationId === inviteOrgId);
+    }
+    return regions;
+  }, [regions, isSuperAdmin, inviteOrgId]);
+
+  const inviteCampusList = useMemo(() => {
+    let list = campuses;
+    if (isSuperAdmin && inviteOrgId)
+      list = list.filter((c) => c.organizationId === inviteOrgId);
+    if (inviteRegionId)
+      list = list.filter((c) => c.regionId === parseInt(inviteRegionId));
+    return list;
+  }, [campuses, isSuperAdmin, inviteOrgId, inviteRegionId]);
+
+  const onInviteSubmit = async (data: InviteFormValues) => {
+    const body: Record<string, string> = {
+      email: data.email,
+      role: data.role,
+    };
+    if (isSuperAdmin && data.organizationId)
+      body.organizationId = data.organizationId;
+    if (data.campusId) body.campusId = data.campusId;
+
+    const result = await api.post<{ message: string; inviteUrl?: string }>(
+      "/api/invites",
+      body,
+    );
+    if (result.ok) {
+      toast.success(result.data.message);
+      setInviteUrl(result.data.inviteUrl || "");
+      reset();
+      fetchData();
+    } else {
+      toast.error(result.error);
     }
   };
+
+  const handleDialogChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      reset();
+      setInviteUrl("");
+    }
+  };
+
+  /* ── Toggle user active ────────────────────────────────── */
 
   const toggleUserActive = async (user: User) => {
     setTogglingId(user.id);
-    try {
-      const res = await fetch("/api/invites", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, isActive: !user.isActive }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        fetchData();
-      } else {
-        alert(data.error || "Failed to update user.");
-      }
-    } catch {
-      alert("Something went wrong.");
-    } finally {
-      setTogglingId(null);
+    const result = await api.put<{ message: string }>("/api/invites", {
+      userId: user.id,
+      isActive: !user.isActive,
+    });
+    if (result.ok) {
+      toast.success(result.data.message);
+      fetchData();
+    } else {
+      toast.error(result.error);
     }
+    setTogglingId(null);
   };
 
-  const copyUrl = () => {
+  const copyInviteUrl = () => {
     navigator.clipboard.writeText(inviteUrl);
-    setInviteMessage("Invite link copied to clipboard!");
+    toast.success("Invite link copied to clipboard");
   };
 
-  // Reset campus filter when region changes
-  const handleFilterRegionChange = (val: string) => {
-    setFilterRegionId(val);
-    setFilterCampusId("");
-  };
+  /* ── Column definitions ────────────────────────────────── */
 
-  const handleInviteRegionChange = (val: string) => {
-    setInviteRegionId(val);
-    setInviteCampusId("");
-  };
+  const userColumns: SxColumn<User>[] = useMemo(
+    () => [
+      {
+        key: "email",
+        header: "Email",
+        render: (row) => (
+          <span className="text-sm font-medium">{row.email}</span>
+        ),
+      },
+      {
+        key: "role",
+        header: "Role",
+        render: (row) => (
+          <SxStatusBadge variant={ROLE_VARIANT[row.role] ?? "default"}>
+            {row.role.replace(/_/g, " ")}
+          </SxStatusBadge>
+        ),
+      },
+      ...(isSuperAdmin
+        ? [
+            {
+              key: "organization" as const,
+              header: "Organization",
+              render: (row: User) => (
+                <span className="text-sm text-muted-foreground">
+                  {row.organization?.organizationName}
+                </span>
+              ),
+            },
+          ]
+        : []),
+      {
+        key: "campus",
+        header: "Campus",
+        render: (row) => (
+          <span className="text-sm text-muted-foreground">
+            {row.campus?.name || "—"}
+          </span>
+        ),
+      },
+      {
+        key: "isActive",
+        header: "Status",
+        render: (row) => (
+          <SxStatusBadge status={row.isActive ? "ACTIVE" : "SUSPENDED"} />
+        ),
+      },
+      {
+        key: "actions",
+        header: "",
+        render: (row) => (
+          <div className="flex justify-end">
+            <SxButton
+              sxVariant={row.isActive ? "danger" : "ghost"}
+              size="sm"
+              icon={
+                row.isActive ? <Lock size={14} /> : <Unlock size={14} />
+              }
+              loading={togglingId === row.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleUserActive(row);
+              }}
+            >
+              {row.isActive ? "Lock" : "Unlock"}
+            </SxButton>
+          </div>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isSuperAdmin, togglingId],
+  );
 
-  const roleBadge = (role: string) => {
-    const colors: Record<string, string> = {
-      SUPER_ADMIN: "bg-purple-100 text-purple-800",
-      ORG_ADMIN: "bg-blue-100 text-blue-800",
-      CAMPUS_ADMIN: "bg-green-100 text-green-800",
-      TEACHER: "bg-yellow-100 text-yellow-800",
-      PARENT: "bg-gray-100 text-gray-800",
-    };
-    return (
-      <span
-        className={`px-2 py-1 rounded-full text-xs font-medium ${colors[role] || "bg-gray-100 text-gray-800"}`}
-      >
-        {role.replace("_", " ")}
-      </span>
-    );
-  };
+  const inviteColumns: SxColumn<Invite>[] = useMemo(
+    () => [
+      {
+        key: "email",
+        header: "Email",
+        render: (row) => (
+          <span className="text-sm font-medium">{row.email}</span>
+        ),
+      },
+      {
+        key: "role",
+        header: "Role",
+        render: (row) => (
+          <SxStatusBadge variant={ROLE_VARIANT[row.role] ?? "default"}>
+            {row.role.replace(/_/g, " ")}
+          </SxStatusBadge>
+        ),
+      },
+      ...(isSuperAdmin
+        ? [
+            {
+              key: "organization" as const,
+              header: "Organization",
+              render: (row: Invite) => (
+                <span className="text-sm text-muted-foreground">
+                  {row.organization?.organizationName}
+                </span>
+              ),
+            },
+          ]
+        : []),
+      {
+        key: "createdBy",
+        header: "Invited By",
+        render: (row) => (
+          <span className="text-sm text-muted-foreground">
+            {row.createdBy}
+          </span>
+        ),
+      },
+      {
+        key: "expiresAt",
+        header: "Expires",
+        render: (row) => (
+          <span className="text-sm text-muted-foreground">
+            {new Date(row.expiresAt).toLocaleDateString()}
+          </span>
+        ),
+      },
+    ],
+    [isSuperAdmin],
+  );
 
-  const hasFilters = !!(filterRegionId || filterCampusId);
+  /* ── Render ────────────────────────────────────────────── */
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Users & Invites</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage users and invite new team members
-          </p>
+    <div className="space-y-6">
+      <SxPageHeader
+        title="Users & Invites"
+        subtitle="Manage users and invite new team members"
+        actions={
+          <SxButton
+            sxVariant="primary"
+            icon={<Plus size={16} />}
+            onClick={() => setIsDialogOpen(true)}
+          >
+            Invite User
+          </SxButton>
+        }
+      />
+
+      {/* ── Filter bar ─────────────────────────────────────── */}
+      {(regions.length > 0 || campuses.length > 0) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
+          <span className="text-sm font-medium text-muted-foreground">
+            Filter:
+          </span>
+
+          {regions.length > 0 && (
+            <Select
+              value={filterRegionId || "all"}
+              onValueChange={(val) => {
+                setFilterRegionId(val === "all" ? "" : val);
+                setFilterCampusId("");
+              }}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="All regions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Regions</SelectItem>
+                {regions.map((r) => (
+                  <SelectItem key={r.id} value={r.id.toString()}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {filterCampusList.length > 0 && (
+            <Select
+              value={filterCampusId || "all"}
+              onValueChange={(val) =>
+                setFilterCampusId(val === "all" ? "" : val)
+              }
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="All campuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Campuses</SelectItem>
+                {filterCampusList.map((c) => (
+                  <SelectItem key={c.id} value={c.id.toString()}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {hasFilters && (
+            <SxButton
+              sxVariant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilterRegionId("");
+                setFilterCampusId("");
+              }}
+            >
+              Clear filters
+            </SxButton>
+          )}
         </div>
-        <button
-          onClick={() => {
-            setShowInviteForm(!showInviteForm);
-            setInviteMessage("");
-            setInviteUrl("");
-            setInviteError("");
-          }}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors text-sm"
-        >
-          {showInviteForm ? "Cancel" : "+ Invite User"}
-        </button>
+      )}
+
+      {/* ── Users table ────────────────────────────────────── */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
+          Users ({filteredUsers.length}
+          {hasFilters && ` of ${users.length}`})
+        </h3>
+        <SxDataTable
+          columns={userColumns}
+          data={filteredUsers as unknown as Record<string, unknown>[]}
+          loading={loading}
+          emptyMessage={
+            hasFilters
+              ? "No users match the selected filters"
+              : "No users found"
+          }
+        />
       </div>
 
-      {/* ====== Invite Form ====== */}
-      {showInviteForm && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-          <h3 className="font-semibold text-gray-900 mb-4">Send an Invitation</h3>
+      {/* ── Pending invites table ──────────────────────────── */}
+      {invites.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
+            Pending Invites ({invites.length})
+          </h3>
+          <SxDataTable
+            columns={inviteColumns}
+            data={invites as unknown as Record<string, unknown>[]}
+            emptyMessage="No pending invites"
+          />
+        </div>
+      )}
 
-          {inviteMessage && (
-            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm mb-4">
-              {inviteMessage}
-              {inviteUrl && (
-                <div className="mt-2">
-                  <button onClick={copyUrl} className="text-green-700 underline hover:text-green-900 text-xs">
-                    Copy invite link manually
-                  </button>
-                </div>
+      {/* ── Invite dialog ──────────────────────────────────── */}
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Send an Invitation</DialogTitle>
+            <DialogDescription>
+              Invite a user to join your organization.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Success banner with copy link */}
+          {inviteUrl && (
+            <div className="flex items-center gap-2 rounded-lg border border-success/25 bg-success/10 px-4 py-3 text-sm text-success">
+              <span className="flex-1">Invite sent! Copy the link below:</span>
+              <SxButton
+                sxVariant="ghost"
+                size="sm"
+                icon={<Copy size={14} />}
+                onClick={copyInviteUrl}
+              >
+                Copy
+              </SxButton>
+            </div>
+          )}
+
+          <Form {...form}>
+            <form
+              onSubmit={handleSubmit(onInviteSubmit)}
+              className="space-y-4"
+            >
+              {/* Org selector (SUPER_ADMIN only) */}
+              {isSuperAdmin && (
+                <FormField
+                  control={form.control}
+                  name="organizationId"
+                  rules={{ required: "Organization is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          form.setValue("regionId", "");
+                          form.setValue("campusId", "");
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select organization" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {organizations.map((org) => (
+                            <SelectItem key={org.id} value={org.id}>
+                              {org.organizationName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
-            </div>
-          )}
-          {inviteError && (
-            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm mb-4">
-              {inviteError}
-            </div>
-          )}
 
-          <form onSubmit={handleInvite} className="space-y-4">
-            {/* Row 1: Org selector (SUPER_ADMIN only) */}
-            {isSuperAdmin && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organization</label>
-                <select
-                  value={inviteOrgId}
-                  onChange={(e) => {
-                    setInviteOrgId(e.target.value);
-                    setInviteRegionId("");
-                    setInviteCampusId("");
-                  }}
-                  required
-                  className="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select organization...</option>
-                  {organizations.map((org) => (
-                    <option key={org.id} value={org.id}>{org.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+              {/* Region + Campus */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="regionId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Region (optional)</FormLabel>
+                      <Select
+                        value={field.value || "all"}
+                        onValueChange={(val) => {
+                          field.onChange(val === "all" ? "" : val);
+                          form.setValue("campusId", "");
+                        }}
+                        disabled={isSuperAdmin && !inviteOrgId}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="All regions" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="all">All Regions</SelectItem>
+                          {inviteRegionList.map((r) => (
+                            <SelectItem key={r.id} value={r.id.toString()}>
+                              {r.name} — {r.city}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {/* Row 2: Region + Campus (for both SUPER_ADMIN and ORG_ADMIN) */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Region
-                  <span className="text-gray-400 font-normal"> (optional)</span>
-                </label>
-                <select
-                  value={inviteRegionId}
-                  onChange={(e) => handleInviteRegionChange(e.target.value)}
-                  disabled={isSuperAdmin && !inviteOrgId}
-                  className="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-                >
-                  <option value="">All regions</option>
-                  {inviteRegionList.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name} — {r.city}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Campus / School
-                  <span className="text-gray-400 font-normal"> (optional)</span>
-                </label>
-                <select
-                  value={inviteCampusId}
-                  onChange={(e) => setInviteCampusId(e.target.value)}
-                  disabled={isSuperAdmin && !inviteOrgId}
-                  className="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-                >
-                  <option value="">All campuses</option>
-                  {inviteCampusList.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Row 3: Email, Role, Submit */}
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="teacher@school.com"
-                  required
-                  className="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                <FormField
+                  control={form.control}
+                  name="campusId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Campus (optional)</FormLabel>
+                      <Select
+                        value={field.value || "all"}
+                        onValueChange={(val) =>
+                          field.onChange(val === "all" ? "" : val)
+                        }
+                        disabled={isSuperAdmin && !inviteOrgId}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="All campuses" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="all">All Campuses</SelectItem>
+                          {inviteCampusList.map((c) => (
+                            <SelectItem key={c.id} value={c.id.toString()}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
 
-              <div className="w-48">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="ORG_ADMIN">Org Admin</option>
-                  <option value="CAMPUS_ADMIN">Campus Admin</option>
-                  <option value="TEACHER">Teacher</option>
-                  <option value="PARENT">Parent</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={inviteLoading || (isSuperAdmin && !inviteOrgId)}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors whitespace-nowrap"
-              >
-                {inviteLoading ? "Sending..." : "Send Invite"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Loading...</div>
-      ) : (
-        <>
-          {/* ====== Filter Bar: Region + Campus tabs ====== */}
-          {(regions.length > 0 || campuses.length > 0) && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm font-medium text-gray-700">Filter by:</span>
-                {hasFilters && (
-                  <button
-                    onClick={() => { setFilterRegionId(""); setFilterCampusId(""); }}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline"
-                  >
-                    Clear filters
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {/* Region tabs */}
-                {regions.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Region:</span>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => handleFilterRegionChange("")}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                          !filterRegionId
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                        }`}
-                      >
-                        All
-                      </button>
-                      {regions.map((r) => (
-                        <button
-                          key={r.id}
-                          onClick={() => handleFilterRegionChange(r.id.toString())}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                            filterRegionId === r.id.toString()
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          }`}
-                        >
-                          {r.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Divider */}
-                {regions.length > 0 && filterCampusList.length > 0 && (
-                  <div className="w-px bg-gray-200 mx-1 self-stretch" />
-                )}
-
-                {/* Campus tabs */}
-                {filterCampusList.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Campus:</span>
-                    <div className="flex gap-1 flex-wrap">
-                      <button
-                        onClick={() => setFilterCampusId("")}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                          !filterCampusId
-                            ? "bg-green-600 text-white"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                        }`}
-                      >
-                        All
-                      </button>
-                      {filterCampusList.map((c) => (
-                        <button
-                          key={c.id}
-                          onClick={() => setFilterCampusId(c.id.toString())}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                            filterCampusId === c.id.toString()
-                              ? "bg-green-600 text-white"
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          }`}
-                        >
-                          {c.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ====== Users Table ====== */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm mb-6">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">
-                Users ({filteredUsers.length}
-                {hasFilters && ` of ${users.length}`})
-              </h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left text-xs font-medium text-gray-500 uppercase border-b border-gray-100">
-                    <th className="px-6 py-3">Email</th>
-                    <th className="px-6 py-3">Role</th>
-                    {isSuperAdmin && <th className="px-6 py-3">Organization</th>}
-                    <th className="px-6 py-3">Campus</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filteredUsers.map((user) => (
-                    <tr
-                      key={user.id}
-                      className={`hover:bg-gray-50 ${!user.isActive ? "opacity-60" : ""}`}
-                    >
-                      <td className="px-6 py-3 text-sm text-gray-900">{user.email}</td>
-                      <td className="px-6 py-3">{roleBadge(user.role)}</td>
-                      {isSuperAdmin && (
-                        <td className="px-6 py-3 text-sm text-gray-600">{user.organization.name}</td>
-                      )}
-                      <td className="px-6 py-3 text-sm text-gray-500">{user.campus?.name || "—"}</td>
-                      <td className="px-6 py-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            user.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {user.isActive ? "Active" : "Locked"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 text-right">
-                        <button
-                          onClick={() => toggleUserActive(user)}
-                          disabled={togglingId === user.id}
-                          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                            user.isActive
-                              ? "text-red-700 bg-red-50 hover:bg-red-100"
-                              : "text-green-700 bg-green-50 hover:bg-green-100"
-                          } disabled:opacity-50`}
-                        >
-                          {togglingId === user.id ? "..." : user.isActive ? "Lock" : "Unlock"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredUsers.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={isSuperAdmin ? 6 : 5}
-                        className="px-6 py-8 text-center text-gray-400 text-sm"
-                      >
-                        {hasFilters ? "No users match the selected filters" : "No users found"}
-                      </td>
-                    </tr>
+              {/* Email + Role */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  rules={{ required: "Email is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="teacher@school.com"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                />
 
-          {/* ====== Pending Invites ====== */}
-          {invites.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-900">Pending Invites ({invites.length})</h3>
+                <FormField
+                  control={form.control}
+                  name="role"
+                  rules={{ required: "Role is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="ORG_ADMIN">Org Admin</SelectItem>
+                          <SelectItem value="CAMPUS_ADMIN">
+                            Campus Admin
+                          </SelectItem>
+                          <SelectItem value="TEACHER">Teacher</SelectItem>
+                          <SelectItem value="PARENT">Parent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left text-xs font-medium text-gray-500 uppercase border-b border-gray-100">
-                      <th className="px-6 py-3">Email</th>
-                      <th className="px-6 py-3">Role</th>
-                      {isSuperAdmin && <th className="px-6 py-3">Organization</th>}
-                      <th className="px-6 py-3">Invited By</th>
-                      <th className="px-6 py-3">Expires</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {invites.map((inv) => (
-                      <tr key={inv.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-3 text-sm text-gray-900">{inv.email}</td>
-                        <td className="px-6 py-3">{roleBadge(inv.role)}</td>
-                        {isSuperAdmin && (
-                          <td className="px-6 py-3 text-sm text-gray-600">{inv.organization.name}</td>
-                        )}
-                        <td className="px-6 py-3 text-sm text-gray-600">{inv.createdBy}</td>
-                        <td className="px-6 py-3 text-sm text-gray-500">
-                          {new Date(inv.expiresAt).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+
+              <DialogFooter>
+                <SxButton
+                  type="button"
+                  sxVariant="outline"
+                  onClick={() => handleDialogChange(false)}
+                >
+                  Cancel
+                </SxButton>
+                <SxButton
+                  type="submit"
+                  sxVariant="primary"
+                  loading={isSubmitting}
+                  disabled={isSuperAdmin && !inviteOrgId}
+                >
+                  Send Invite
+                </SxButton>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

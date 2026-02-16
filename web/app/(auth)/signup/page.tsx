@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Loader2, AlertTriangle } from "lucide-react";
 
 function SignupForm() {
   const router = useRouter();
@@ -26,7 +27,6 @@ function SignupForm() {
 
   const isInvited = !!inviteToken;
 
-  // If invite token is present, fetch invite info
   useEffect(() => {
     if (!inviteToken) return;
 
@@ -43,7 +43,6 @@ function SignupForm() {
       .catch(() => setInviteError("Failed to validate invite link"));
   }, [inviteToken]);
 
-  // Auto-generate org code from org name
   const handleOrgNameChange = (value: string) => {
     setOrgName(value);
     const code = value
@@ -71,7 +70,6 @@ function SignupForm() {
     setLoading(true);
 
     try {
-      // 1. Create the account
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,7 +90,6 @@ function SignupForm() {
         return;
       }
 
-      // 2. Auto-sign in
       const signInResult = await signIn("credentials", {
         email,
         password,
@@ -100,7 +97,6 @@ function SignupForm() {
       });
 
       if (signInResult?.error) {
-        // Account created but auto-login failed — send to login page
         router.push("/login");
       } else {
         router.push("/admin/dashboard");
@@ -112,18 +108,17 @@ function SignupForm() {
     }
   };
 
-  // If invite is invalid, show error
   if (isInvited && inviteError) {
     return (
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl text-center">
-        <div className="text-4xl mb-4">⚠️</div>
-        <h2 className="text-xl font-semibold text-white mb-2">
+      <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center shadow-2xl backdrop-blur-xl">
+        <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-warning" />
+        <h2 className="mb-2 text-xl font-semibold text-white">
           Invalid Invite
         </h2>
-        <p className="text-sm text-slate-400 mb-6">{inviteError}</p>
+        <p className="mb-6 text-sm text-slate-400">{inviteError}</p>
         <Link
           href="/login"
-          className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+          className="text-sm font-medium text-primary hover:text-primary/80"
         >
           Go to login
         </Link>
@@ -131,21 +126,21 @@ function SignupForm() {
     );
   }
 
-  // If invite is present but still loading
   if (isInvited && !inviteInfo && !inviteError) {
     return (
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl text-center text-slate-400">
+      <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center text-slate-400 shadow-2xl backdrop-blur-xl">
+        <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
         Validating invite...
       </div>
     );
   }
 
   return (
-    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
-      <h2 className="text-xl font-semibold text-white mb-1">
+    <div className="rounded-lg border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
+      <h2 className="mb-1 text-xl font-semibold text-white">
         {isInvited ? "Join your organization" : "Create your organization"}
       </h2>
-      <p className="text-sm text-slate-400 mb-6">
+      <p className="mb-6 text-sm text-slate-400">
         {isInvited ? (
           <>
             You&apos;ve been invited to join{" "}
@@ -155,22 +150,21 @@ function SignupForm() {
             </strong>
           </>
         ) : (
-          "Get started with SAIREX SMS — free to try"
+          "Get started with SAIREX SMS"
         )}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-lg text-sm">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-300">
             {error}
           </div>
         )}
 
-        {/* Org fields — only show for new org signup */}
         {!isInvited && (
           <>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+              <label className="mb-1.5 block text-sm font-medium text-slate-300">
                 Organization Name
               </label>
               <input
@@ -179,12 +173,13 @@ function SignupForm() {
                 onChange={(e) => handleOrgNameChange(e.target.value)}
                 placeholder="e.g. Bright Future Schools"
                 required
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                autoFocus
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+              <label className="mb-1.5 block text-sm font-medium text-slate-300">
                 Organization Code
               </label>
               <input
@@ -193,18 +188,17 @@ function SignupForm() {
                 onChange={(e) => setOrgCode(e.target.value.toUpperCase())}
                 placeholder="AUTO-GENERATED"
                 required
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all font-mono"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 font-mono text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="mt-1 text-xs text-slate-500">
                 Unique identifier — auto-generated from name
               </p>
             </div>
           </>
         )}
 
-        {/* Email */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1.5">
+          <label className="mb-1.5 block text-sm font-medium text-slate-300">
             Email address
           </label>
           <input
@@ -214,20 +208,19 @@ function SignupForm() {
             placeholder="you@example.com"
             required
             readOnly={isInvited}
-            className={`w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all ${
-              isInvited ? "opacity-60 cursor-not-allowed" : ""
+            className={`w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+              isInvited ? "cursor-not-allowed opacity-60" : ""
             }`}
           />
           {isInvited && (
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="mt-1 text-xs text-slate-500">
               Set by your admin — cannot be changed
             </p>
           )}
         </div>
 
-        {/* Password */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1.5">
+          <label className="mb-1.5 block text-sm font-medium text-slate-300">
             Password
           </label>
           <input
@@ -237,13 +230,12 @@ function SignupForm() {
             placeholder="Minimum 8 characters"
             required
             minLength={8}
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
 
-        {/* Confirm Password */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1.5">
+          <label className="mb-1.5 block text-sm font-medium text-slate-300">
             Confirm Password
           </label>
           <input
@@ -253,37 +245,18 @@ function SignupForm() {
             placeholder="Repeat your password"
             required
             minLength={8}
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
 
-        {/* Submit */}
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+          className="w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
-              <svg
-                className="animate-spin h-4 w-4"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
+              <Loader2 className="h-4 w-4 animate-spin" />
               Creating account...
             </span>
           ) : isInvited ? (
@@ -295,12 +268,12 @@ function SignupForm() {
       </form>
 
       <div className="mt-5 text-center">
-        <span className="text-slate-500 text-sm">
+        <span className="text-sm text-slate-500">
           Already have an account?{" "}
         </span>
         <Link
           href="/login"
-          className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+          className="text-sm font-medium text-primary hover:text-primary/80"
         >
           Sign in
         </Link>
@@ -311,36 +284,15 @@ function SignupForm() {
 
 export default function SignupPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 py-12">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md mx-4">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white tracking-tight">
-            SAIREX <span className="text-blue-400">SMS</span>
-          </h1>
-          <p className="text-slate-400 mt-2 text-sm">
-            School Management System
-          </p>
+    <Suspense
+      fallback={
+        <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center text-slate-400 shadow-2xl backdrop-blur-xl">
+          <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
+          Loading...
         </div>
-
-        <Suspense
-          fallback={
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl text-center text-slate-400">
-              Loading...
-            </div>
-          }
-        >
-          <SignupForm />
-        </Suspense>
-
-        <p className="text-center text-slate-500 text-xs mt-6">
-          Powered by Sairex Technologies
-        </p>
-      </div>
-    </div>
+      }
+    >
+      <SignupForm />
+    </Suspense>
   );
 }

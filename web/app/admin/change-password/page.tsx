@@ -1,138 +1,159 @@
 "use client";
 
-import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
+import { api } from "@/lib/api-client";
+import { SxPageHeader, SxButton } from "@/components/sx";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+
+/* ── Types ─────────────────────────────────────────────────── */
+
+interface PasswordFormValues {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+/* ── Page component ────────────────────────────────────────── */
 
 export default function ChangePasswordPage() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage("");
-    setError("");
+  const form = useForm<PasswordFormValues>({
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
 
-    if (newPassword !== confirmPassword) {
-      setError("New passwords do not match.");
-      return;
-    }
+  const {
+    handleSubmit,
+    reset,
+    watch,
+    formState: { isSubmitting },
+  } = form;
 
-    if (newPassword.length < 8) {
-      setError("New password must be at least 8 characters.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
+  const onSubmit = async (data: PasswordFormValues) => {
+    if (data.newPassword !== data.confirmPassword) {
+      form.setError("confirmPassword", {
+        message: "New passwords do not match",
       });
+      return;
+    }
 
-      const data = await res.json();
+    if (data.newPassword.length < 8) {
+      form.setError("newPassword", {
+        message: "New password must be at least 8 characters",
+      });
+      return;
+    }
 
-      if (!res.ok) {
-        setError(data.error || "Failed to change password.");
-      } else {
-        setMessage("Password changed successfully!");
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      }
-    } catch {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
+    const result = await api.post<{ message: string }>(
+      "/api/auth/change-password",
+      {
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+      },
+    );
+
+    if (result.ok) {
+      toast.success("Password changed successfully");
+      reset();
+    } else {
+      toast.error(result.error);
     }
   };
 
   return (
-    <div className="max-w-lg">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">
-        Change Password
-      </h1>
-      <p className="text-sm text-gray-500 mb-8">
-        Update your account password. You will need your current password.
-      </p>
+    <div className="mx-auto max-w-lg space-y-6">
+      <SxPageHeader
+        title="Change Password"
+        subtitle="Update your account password. You will need your current password."
+      />
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {message && (
-          <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm">
-            {message}
+      <Form {...form}>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <FormField
+            control={form.control}
+            name="currentPassword"
+            rules={{ required: "Current password is required" }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Current Password</FormLabel>
+                <FormControl>
+                  <Input type="password" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="newPassword"
+            rules={{
+              required: "New password is required",
+              minLength: { value: 8, message: "Minimum 8 characters" },
+            }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>New Password</FormLabel>
+                <FormControl>
+                  <Input type="password" {...field} />
+                </FormControl>
+                <FormDescription>Minimum 8 characters</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="confirmPassword"
+            rules={{ required: "Please confirm your new password" }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirm New Password</FormLabel>
+                <FormControl>
+                  <Input type="password" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="flex gap-3 pt-2">
+            <SxButton
+              type="submit"
+              sxVariant="primary"
+              loading={isSubmitting}
+              className="flex-1"
+            >
+              Update Password
+            </SxButton>
+            <SxButton
+              type="button"
+              sxVariant="outline"
+              onClick={() => router.back()}
+              className="flex-1"
+            >
+              Cancel
+            </SxButton>
           </div>
-        )}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Current Password
-          </label>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            required
-            className="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            New Password
-          </label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-            minLength={8}
-            className="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <p className="text-xs text-gray-400 mt-1">Minimum 8 characters</p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Confirm New Password
-          </label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={8}
-            className="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-
-        <div className="flex gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
-          >
-            {loading ? "Updating..." : "Update Password"}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex-1 py-2.5 px-4 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 font-medium rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
+        </form>
+      </Form>
     </div>
   );
 }

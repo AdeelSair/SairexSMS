@@ -1,121 +1,269 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { Plus } from "lucide-react";
+
+import { api } from "@/lib/api-client";
+import {
+  SxPageHeader,
+  SxButton,
+  SxStatusBadge,
+  SxDataTable,
+  type SxColumn,
+} from "@/components/sx";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+
+/* ── Types ─────────────────────────────────────────────────── */
+
+interface Organization {
+  id: string;
+  organizationName: string;
+}
+
+interface Region {
+  id: number;
+  name: string;
+  city: string;
+  status: string;
+  organizationId: string;
+  directorName?: string;
+  contactEmail?: string;
+  organization: { id: string; organizationName: string };
+}
+
+interface RegionFormValues {
+  name: string;
+  city: string;
+  organizationId: string;
+}
+
+/* ── Column definitions ────────────────────────────────────── */
+
+const columns: SxColumn<Region>[] = [
+  {
+    key: "name",
+    header: "Region Name",
+    render: (row) => <span className="font-medium">{row.name}</span>,
+  },
+  {
+    key: "city",
+    header: "City",
+  },
+  {
+    key: "organization",
+    header: "Organization",
+    render: (row) => (
+      <span className="text-muted-foreground">
+        {row.organization?.organizationName}
+      </span>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    render: (row) => <SxStatusBadge status={row.status} />,
+  },
+];
+
+/* ── Page component ────────────────────────────────────────── */
 
 export default function RegionsPage() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [orgs, setOrgs] = useState<any[]>([]);
-  const [regions, setRegions] = useState<any[]>([]);
-  const [formData, setFormData] = useState({ name: '', city: '', organizationId: '' });
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  /* ── Fetch data ────────────────────────────────────────── */
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [regResult, orgResult] = await Promise.all([
+      api.get<Region[]>("/api/regions"),
+      api.get<Organization[]>("/api/organizations"),
+    ]);
+    if (regResult.ok) setRegions(regResult.data);
+    else toast.error(regResult.error);
+    if (orgResult.ok) setOrgs(orgResult.data);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  const fetchData = async () => {
-    const [orgRes, regRes] = await Promise.all([
-      fetch('/api/organizations'),
-      fetch('/api/regions')
-    ]);
-    setOrgs(await orgRes.json());
-    setRegions(await regRes.json());
-  };
+  /* ── Form ──────────────────────────────────────────────── */
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await fetch('/api/regions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-    if (res.ok) {
-      setIsModalOpen(false);
-      setFormData({ name: '', city: '', organizationId: '' });
+  const form = useForm<RegionFormValues>({
+    defaultValues: { name: "", city: "", organizationId: "" },
+  });
+
+  const {
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = form;
+
+  const onSubmit = async (data: RegionFormValues) => {
+    const result = await api.post<Region>("/api/regions", data);
+    if (result.ok) {
+      toast.success("Regional office created");
+      setIsDialogOpen(false);
+      reset();
       fetchData();
+    } else {
+      toast.error(result.error);
     }
   };
 
+  const handleOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) reset();
+  };
+
+  /* ── Render ────────────────────────────────────────────── */
+
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Regional Offices</h1>
-          <p className="text-slate-500">Define geographic management layers for your Organizations.</p>
-        </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all"
-        >
-          + Add Regional Office
-        </button>
-      </div>
+    <div className="space-y-6">
+      <SxPageHeader
+        title="Regional Offices"
+        subtitle="Define geographic management layers for your organizations"
+        actions={
+          <SxButton
+            sxVariant="primary"
+            icon={<Plus size={16} />}
+            onClick={() => setIsDialogOpen(true)}
+          >
+            Add Regional Office
+          </SxButton>
+        }
+      />
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-4 font-semibold text-slate-700">Region Name</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">City</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Parent Organization</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-900">
-            {regions.map((reg) => (
-              <tr key={reg.id} className="hover:bg-slate-50/50">
-                <td className="px-6 py-4 font-medium">{reg.name}</td>
-                <td className="px-6 py-4">{reg.city}</td>
-                <td className="px-6 py-4 text-slate-500">{reg.organization?.name}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <SxDataTable
+        columns={columns}
+        data={regions as unknown as Record<string, unknown>[]}
+        loading={loading}
+        emptyMessage="No regional offices found. Create one to get started."
+      />
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-slate-800 mb-4">Add Regional Office</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Parent Organization</label>
-                <select 
-                  required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                  value={formData.organizationId}
-                  onChange={(e) => setFormData({...formData, organizationId: e.target.value})}
+      {/* ── Create dialog ──────────────────────────────────── */}
+      <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Regional Office</DialogTitle>
+            <DialogDescription>
+              Create a new geographic management layer.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="organizationId"
+                rules={{ required: "Organization is required" }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Parent Organization</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select organization" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {orgs.map((org) => (
+                          <SelectItem key={org.id} value={org.id}>
+                            {org.organizationName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="name"
+                rules={{ required: "Region name is required" }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Region Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. Punjab South Region"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="city"
+                rules={{ required: "City is required" }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Multan" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <SxButton
+                  type="button"
+                  sxVariant="outline"
+                  onClick={() => handleOpenChange(false)}
                 >
-                  <option value="">Select Organization</option>
-                  {orgs.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Region Name</label>
-                <input 
-                  type="text" required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                  placeholder="e.g. Punjab South Region"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">City</label>
-                <input 
-                  type="text" required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                  placeholder="e.g. Multan"
-                  value={formData.city}
-                  onChange={(e) => setFormData({...formData, city: e.target.value})}
-                />
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg">Create Region</button>
-              </div>
+                  Cancel
+                </SxButton>
+                <SxButton
+                  type="submit"
+                  sxVariant="primary"
+                  loading={isSubmitting}
+                >
+                  Create Region
+                </SxButton>
+              </DialogFooter>
             </form>
-          </div>
-        </div>
-      )}
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

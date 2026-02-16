@@ -1,191 +1,383 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { Plus } from "lucide-react";
+
+import { api } from "@/lib/api-client";
+import {
+  SxPageHeader,
+  SxButton,
+  SxStatusBadge,
+  SxDataTable,
+  type SxColumn,
+} from "@/components/sx";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+
+/* ── Types ─────────────────────────────────────────────────── */
+
+interface Organization {
+  id: string;
+  organizationName: string;
+}
+
+interface Region {
+  id: number;
+  name: string;
+  city: string;
+  organizationId: string;
+}
+
+interface Campus {
+  id: number;
+  name: string;
+  campusCode: string;
+  city: string;
+  status: string;
+  organizationId: string;
+  regionId: number | null;
+  organization: { id: string; organizationName: string };
+  region: { id: number; name: string; city: string } | null;
+}
+
+interface CampusFormValues {
+  name: string;
+  campusCode: string;
+  city: string;
+  organizationId: string;
+  regionId: string;
+}
+
+/* ── Column definitions ────────────────────────────────────── */
+
+const columns: SxColumn<Campus>[] = [
+  {
+    key: "name",
+    header: "Campus Name",
+    render: (row) => (
+      <div>
+        <div className="font-medium">{row.name}</div>
+        <div className="text-xs text-muted-foreground font-data">
+          {row.campusCode}
+        </div>
+      </div>
+    ),
+  },
+  {
+    key: "organization",
+    header: "Organization",
+    render: (row) => (
+      <span className="text-muted-foreground">
+        {row.organization?.organizationName}
+      </span>
+    ),
+  },
+  {
+    key: "region",
+    header: "Region",
+    render: (row) =>
+      row.region ? (
+        <SxStatusBadge variant="info">{row.region.name}</SxStatusBadge>
+      ) : (
+        <span className="text-xs text-muted-foreground italic">
+          Independent
+        </span>
+      ),
+  },
+  {
+    key: "city",
+    header: "City",
+  },
+  {
+    key: "status",
+    header: "Status",
+    render: (row) => <SxStatusBadge status={row.status} />,
+  },
+];
+
+/* ── Page component ────────────────────────────────────────── */
 
 export default function CampusesPage() {
-  const [isCampusModalOpen, setIsCampusModalOpen] = useState(false);
-  const [orgs, setOrgs] = useState<any[]>([]);
-  const [regions, setRegions] = useState<any[]>([]);
-  const [campuses, setCampuses] = useState<any[]>([]);
+  const [campuses, setCampuses] = useState<Campus[]>([]);
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Form States
-  const [campusData, setCampusData] = useState({
-    name: '',
-    campusCode: '',
-    city: '',
-    organizationId: '',
-    regionId: ''
-  });
+  /* ── Fetch data ────────────────────────────────────────── */
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [camResult, orgResult, regResult] = await Promise.all([
+      api.get<Campus[]>("/api/campuses"),
+      api.get<Organization[]>("/api/organizations"),
+      api.get<Region[]>("/api/regions"),
+    ]);
+    if (camResult.ok) setCampuses(camResult.data);
+    else toast.error(camResult.error);
+    if (orgResult.ok) setOrgs(orgResult.data);
+    if (regResult.ok) setRegions(regResult.data);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  const parseArrayResponse = async (res: Response) => {
-    const text = await res.text();
-    if (!text) return [];
-    try {
-      const data = JSON.parse(text);
-      return Array.isArray(data) ? data : [];
-    } catch {
-      return [];
-    }
-  };
+  /* ── Form ──────────────────────────────────────────────── */
 
-  const fetchData = async () => {
-    try {
-      const [orgRes, regRes, camRes] = await Promise.all([
-        fetch('/api/organizations'),
-        fetch('/api/regions'),
-        fetch('/api/campuses')
-      ]);
-      const [orgData, regData, camData] = await Promise.all([
-        parseArrayResponse(orgRes),
-        parseArrayResponse(regRes),
-        parseArrayResponse(camRes),
-      ]);
-      setOrgs(orgData);
-      setRegions(regData);
-      setCampuses(camData);
-    } catch {
-      setOrgs([]);
-      setRegions([]);
-      setCampuses([]);
-    }
-  };
+  const form = useForm<CampusFormValues>({
+    defaultValues: {
+      name: "",
+      campusCode: "",
+      city: "",
+      organizationId: "",
+      regionId: "",
+    },
+  });
 
-  const handleAddCampus = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await fetch('/api/campuses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(campusData),
+  const {
+    handleSubmit,
+    reset,
+    watch,
+    formState: { isSubmitting },
+  } = form;
+
+  const selectedOrgId = watch("organizationId");
+
+  const filteredRegions = useMemo(
+    () =>
+      selectedOrgId
+        ? regions.filter((r) => r.organizationId === selectedOrgId)
+        : [],
+    [regions, selectedOrgId],
+  );
+
+  const onSubmit = async (data: CampusFormValues) => {
+    const result = await api.post<Campus>("/api/campuses", {
+      ...data,
+      regionId: data.regionId || null,
     });
-    if (res.ok) {
-      setIsCampusModalOpen(false);
+    if (result.ok) {
+      toast.success("Campus registered successfully");
+      setIsDialogOpen(false);
+      reset();
       fetchData();
+    } else {
+      toast.error(result.error);
     }
   };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) reset();
+  };
+
+  /* ── Render ────────────────────────────────────────────── */
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Campuses & Regions</h1>
-          <p className="text-slate-500">Structure your regional offices and school branches.</p>
-        </div>
-        <button 
-          onClick={() => setIsCampusModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-all"
-        >
-          + Add New Campus
-        </button>
-      </div>
+    <div className="space-y-6">
+      <SxPageHeader
+        title="Campuses"
+        subtitle="Manage school branches and operational units"
+        actions={
+          <SxButton
+            sxVariant="primary"
+            icon={<Plus size={16} />}
+            onClick={() => setIsDialogOpen(true)}
+          >
+            Add Campus
+          </SxButton>
+        }
+      />
 
-      {/* --- CAMPUS LIST --- */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-4 font-semibold text-slate-700">Campus Name</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Organization</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Region</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">City</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Code</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-900">
-            {campuses.map((campus) => (
-              <tr key={campus.id} className="hover:bg-slate-50/50">
-                <td className="px-6 py-4 font-medium">{campus.name}</td>
-                <td className="px-6 py-4 text-slate-500">{campus.organization?.name}</td>
-                <td className="px-6 py-4">
-                   {campus.region ? (
-                     <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-bold">{campus.region.name}</span>
-                   ) : (
-                     <span className="text-slate-300 text-xs italic">No Region</span>
-                   )}
-                </td>
-                <td className="px-6 py-4">{campus.city}</td>
-                <td className="px-6 py-4 font-mono text-xs">{campus.campusCode}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <SxDataTable
+        columns={columns}
+        data={campuses as unknown as Record<string, unknown>[]}
+        loading={loading}
+        emptyMessage="No campuses found. Register one to get started."
+      />
 
-      {/* --- ADD CAMPUS MODAL --- */}
-      {isCampusModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-slate-800 mb-4">Register New Campus</h2>
-            <form onSubmit={handleAddCampus} className="space-y-4">
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Parent Organization</label>
-                <select 
-                  required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                  value={campusData.organizationId}
-                  onChange={(e) => setCampusData({...campusData, organizationId: e.target.value})}
-                >
-                  <option value="">Select Organization</option>
-                  {orgs.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
-                </select>
-              </div>
+      {/* ── Create dialog ──────────────────────────────────── */}
+      <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Register New Campus</DialogTitle>
+            <DialogDescription>
+              Add a new school branch under an organization.
+            </DialogDescription>
+          </DialogHeader>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Region (Optional)</label>
-                <select 
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                  value={campusData.regionId}
-                  onChange={(e) => setCampusData({...campusData, regionId: e.target.value})}
-                >
-                  <option value="">No Region / Independent</option>
-                  {regions.map(reg => <option key={reg.id} value={reg.id}>{reg.name} ({reg.city})</option>)}
-                </select>
-              </div>
+          <Form {...form}>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Parent org */}
+              <FormField
+                control={form.control}
+                name="organizationId"
+                rules={{ required: "Organization is required" }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Parent Organization</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={(val) => {
+                        field.onChange(val);
+                        form.setValue("regionId", "");
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select organization" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {orgs.map((org) => (
+                          <SelectItem key={org.id} value={org.id}>
+                            {org.organizationName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Campus Name</label>
-                  <input 
-                    type="text" required
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                    value={campusData.name}
-                    onChange={(e) => setCampusData({...campusData, name: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Campus Code</label>
-                  <input 
-                    type="text" required
-                    placeholder="e.g. ISB-01"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                    value={campusData.campusCode}
-                    onChange={(e) => setCampusData({...campusData, campusCode: e.target.value})}
-                  />
-                </div>
-              </div>
+              {/* Region (optional, filtered by org) */}
+              <FormField
+                control={form.control}
+                name="regionId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Region (Optional)</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={!selectedOrgId}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue
+                            placeholder={
+                              selectedOrgId
+                                ? "Independent / No Region"
+                                : "Select org first"
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          Independent / No Region
+                        </SelectItem>
+                        {filteredRegions.map((r) => (
+                          <SelectItem key={r.id} value={r.id.toString()}>
+                            {r.name} — {r.city}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">City</label>
-                <input 
-                  type="text" required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 outline-none"
-                  value={campusData.city}
-                  onChange={(e) => setCampusData({...campusData, city: e.target.value})}
+              {/* Name + Code */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  rules={{ required: "Campus name is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Campus Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. Islamabad Campus"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="campusCode"
+                  rules={{ required: "Campus code is required" }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Campus Code</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. ISB-01" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
 
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsCampusModalOpen(false)} className="px-4 py-2 text-slate-600">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg">Register Campus</button>
-              </div>
+              {/* City */}
+              <FormField
+                control={form.control}
+                name="city"
+                rules={{ required: "City is required" }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Islamabad" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <SxButton
+                  type="button"
+                  sxVariant="outline"
+                  onClick={() => handleOpenChange(false)}
+                >
+                  Cancel
+                </SxButton>
+                <SxButton
+                  type="submit"
+                  sxVariant="primary"
+                  loading={isSubmitting}
+                >
+                  Register Campus
+                </SxButton>
+              </DialogFooter>
             </form>
-          </div>
-        </div>
-      )}
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

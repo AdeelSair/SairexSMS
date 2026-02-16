@@ -1,181 +1,541 @@
-'use client'; 
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import { Plus, Building2, Globe, FileText } from "lucide-react";
+
+import { api } from "@/lib/api-client";
+import {
+  createOrganizationSchema,
+  ORGANIZATION_TYPE,
+  ORGANIZATION_STATUS,
+  IANA_TIMEZONES,
+  type CreateOrganizationInput,
+} from "@/lib/validations/organization";
+
+import {
+  SxPageHeader,
+  SxButton,
+  SxStatusBadge,
+  SxDataTable,
+  SxFormSection,
+  type SxColumn,
+} from "@/components/sx";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+
+/* ══════════════════════════════════════════════════════════════
+   Types
+   ══════════════════════════════════════════════════════════════ */
+
+interface Organization {
+  id: string;
+  organizationName: string;
+  displayName: string;
+  slug: string;
+  organizationType: string;
+  status: string;
+  timeZone: string;
+  defaultLanguage: string;
+  registrationNumber?: string;
+  taxNumber?: string;
+  logoUrl?: string;
+  websiteUrl?: string;
+  createdAt: string;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Column Definitions
+   Design tokens only — no hardcoded colors.
+   ══════════════════════════════════════════════════════════════ */
+
+const columns: SxColumn<Organization>[] = [
+  {
+    key: "organizationName",
+    header: "Organization",
+    render: (row) => (
+      <div>
+        <div className="font-medium">{row.organizationName}</div>
+        <div className="text-xs text-muted-foreground">{row.displayName}</div>
+      </div>
+    ),
+  },
+  {
+    key: "slug",
+    header: "Slug",
+    mono: true,
+    render: (row) => (
+      <span className="font-data text-xs text-muted-foreground">{row.slug}</span>
+    ),
+  },
+  {
+    key: "organizationType",
+    header: "Type",
+    render: (row) => (
+      <SxStatusBadge variant="info">
+        {row.organizationType}
+      </SxStatusBadge>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    render: (row) => <SxStatusBadge status={row.status} />,
+  },
+  {
+    key: "timeZone",
+    header: "Timezone",
+    render: (row) => (
+      <span className="text-xs text-muted-foreground">{row.timeZone}</span>
+    ),
+  },
+  {
+    key: "createdAt",
+    header: "Created",
+    render: (row) => (
+      <span className="font-data text-xs text-muted-foreground">
+        {new Date(row.createdAt).toLocaleDateString()}
+      </span>
+    ),
+  },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   Helpers
+   ══════════════════════════════════════════════════════════════ */
+
+function humanize(value: string): string {
+  return value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, " ");
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Page Component
+   ══════════════════════════════════════════════════════════════ */
 
 export default function OrganizationsPage() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [orgs, setOrgs] = useState<any[]>([]);
-  
-  // Form State
-  const [formData, setFormData] = useState({
-    name: '',
-    orgCode: '',
-    plan: 'FREE'
-  });
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Fetch Data on Load
-  useEffect(() => {
-    fetchOrgs();
+  /* ── Data fetching ──────────────────────────────────────── */
+
+  const fetchOrgs = useCallback(async () => {
+    setLoading(true);
+    const result = await api.get<Organization[]>("/api/organizations");
+    if (result.ok) {
+      setOrgs(result.data);
+    } else {
+      toast.error(result.error);
+    }
+    setLoading(false);
   }, []);
 
-  const fetchOrgs = async () => {
-    try {
-      const res = await fetch('/api/organizations');
-      if (res.ok) {
-        const data = await res.json();
-        setOrgs(data);
+  useEffect(() => {
+    fetchOrgs();
+  }, [fetchOrgs]);
+
+  /* ── Form: Zod resolver + React Hook Form ───────────────── */
+
+  const form = useForm<CreateOrganizationInput>({
+    resolver: zodResolver(createOrganizationSchema),
+    defaultValues: {
+      organizationName: "",
+      displayName: "",
+      slug: "",
+      organizationType: "SCHOOL",
+      registrationNumber: "",
+      taxNumber: "",
+      logoUrl: "",
+      websiteUrl: "",
+      timeZone: "Asia/Karachi",
+      defaultLanguage: "en",
+      status: "PENDING",
+    },
+  });
+
+  const {
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = form;
+
+  /* ── Submit handler ─────────────────────────────────────── */
+
+  const onSubmit = async (data: CreateOrganizationInput) => {
+    const result = await api.post<Organization>("/api/organizations", data);
+
+    if (result.ok) {
+      toast.success("Organization created successfully");
+      setIsDialogOpen(false);
+      reset();
+      fetchOrgs();
+    } else if (result.fieldErrors) {
+      for (const [field, messages] of Object.entries(result.fieldErrors)) {
+        form.setError(field as keyof CreateOrganizationInput, {
+          message: messages[0],
+        });
       }
-    } catch (error) {
-      console.error("Failed to fetch", error);
+      toast.error("Please fix the validation errors");
+    } else {
+      toast.error(result.error);
     }
   };
 
-  // Handle Submit
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  /* ── Dialog open/close ──────────────────────────────────── */
 
-    try {
-      const res = await fetch('/api/organizations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      if (res.ok) {
-        setIsModalOpen(false); // Close modal
-        setFormData({ name: '', orgCode: '', plan: 'FREE' }); // Reset form
-        fetchOrgs(); // Refresh list
-        alert('✅ Organization Created Successfully!');
-      } else {
-        alert('❌ Error creating organization');
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) reset();
   };
+
+  /* ══════════════════════════════════════════════════════════
+     Render
+     ══════════════════════════════════════════════════════════ */
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Organizations</h1>
-          <p className="text-slate-500">Manage your SaaS tenants here.</p>
-        </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-all"
-        >
-          + Add New Organization
-        </button>
-      </div>
+    <div className="space-y-6">
+      {/* ── Page Header ───────────────────────────────────── */}
+      <SxPageHeader
+        title="Organizations"
+        subtitle="Manage SaaS tenants and their configuration"
+        actions={
+          <SxButton
+            sxVariant="primary"
+            icon={<Plus size={16} />}
+            onClick={() => setIsDialogOpen(true)}
+          >
+            Add Organization
+          </SxButton>
+        }
+      />
 
-      {/* --- DATA TABLE --- */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-4 font-semibold text-slate-700">Org Name</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Code</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Plan</th>
-              <th className="px-6 py-4 font-semibold text-slate-700">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {orgs.map((org) => (
-              <tr key={org.id} className="hover:bg-slate-50/50">
-                <td className="px-6 py-4 font-medium text-slate-900">{org.name}</td>
-                <td className="px-6 py-4 text-slate-500">{org.orgCode}</td>
-                <td className="px-6 py-4">
-                  <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-semibold">{org.subscriptionPlan}</span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${org.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {org.isActive ? 'ACTIVE' : 'INACTIVE'}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {orgs.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-slate-400">
-                  No organizations found. Add one to get started.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* ── Data Table ────────────────────────────────────── */}
+      <SxDataTable
+        columns={columns}
+        data={orgs as unknown as Record<string, unknown>[]}
+        loading={loading}
+        emptyMessage="No organizations found. Create one to get started."
+      />
 
-      {/* --- MODAL POPUP (The Form) --- */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all">
-            <h2 className="text-xl font-bold text-slate-800 mb-4">Add Organization</h2>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Organization Name</label>
-                <input 
-                  type="text" 
-                  required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="e.g. Beaconhouse System"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+      {/* ── Create Dialog ─────────────────────────────────── */}
+      <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>New Organization</DialogTitle>
+            <DialogDescription>
+              Create a new tenant. All fields are validated. A slug is
+              auto-generated from the name if left blank.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form
+              onSubmit={handleSubmit(onSubmit)}
+              className="space-y-6"
+            >
+              {/* ── Section 1: Basic Information ───────────── */}
+              <SxFormSection
+                title="Basic Information"
+                description="Core identity fields for this organization"
+                columns={2}
+              >
+                <FormField
+                  control={form.control}
+                  name="organizationName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. Beaconhouse School System"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Unique Code (Subdomain)</label>
-                <input 
-                  type="text" 
-                  required
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none uppercase"
-                  placeholder="e.g. BSS-GLOBAL"
-                  value={formData.orgCode}
-                  onChange={(e) => setFormData({...formData, orgCode: e.target.value.toUpperCase()})}
+                <FormField
+                  control={form.control}
+                  name="displayName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Display Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. Beaconhouse"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                <p className="text-xs text-slate-400 mt-1">This will be used for login links.</p>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Subscription Plan</label>
-                <select 
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={formData.plan}
-                  onChange={(e) => setFormData({...formData, plan: e.target.value})}
-                >
-                  <option value="FREE">Free Tier</option>
-                  <option value="BASIC">Basic</option>
-                  <option value="PRO">Pro (Enterprise)</option>
-                </select>
-              </div>
+                <FormField
+                  control={form.control}
+                  name="slug"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Slug</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="auto-generated if empty"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        URL-friendly identifier (lowercase, hyphens only)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SxFormSection>
 
-              <div className="flex justify-end gap-3 mt-6">
-                <button 
+              {/* ── Section 2: Classification ──────────────── */}
+              <SxFormSection
+                title="Classification"
+                description="Type, status, and locale settings"
+                columns={2}
+              >
+                <FormField
+                  control={form.control}
+                  name="organizationType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Type</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ORGANIZATION_TYPE.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {humanize(t)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Initial Status</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ORGANIZATION_STATUS.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {humanize(s)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="timeZone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Timezone</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select timezone" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {IANA_TIMEZONES.map((tz) => (
+                            <SelectItem key={tz} value={tz}>
+                              {tz}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="defaultLanguage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Default Language</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. en, ur"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        ISO 639-1 language code
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SxFormSection>
+
+              {/* ── Section 3: Registration & Legal ────────── */}
+              <SxFormSection
+                title="Registration & Legal"
+                description="Optional government and tax identifiers"
+                columns={2}
+              >
+                <FormField
+                  control={form.control}
+                  name="registrationNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Registration Number</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. REG12345"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="taxNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tax / NTN Number</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. 1234567-8"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SxFormSection>
+
+              {/* ── Section 4: Web Presence ────────────────── */}
+              <SxFormSection
+                title="Web Presence"
+                description="Optional branding and online links"
+                columns={1}
+              >
+                <FormField
+                  control={form.control}
+                  name="websiteUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Website URL</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="https://example.com"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="logoUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Logo URL</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="https://cdn.example.com/logo.png"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Must be an HTTPS URL
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SxFormSection>
+
+              {/* ── Footer Actions ─────────────────────────── */}
+              <DialogFooter>
+                <SxButton
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  sxVariant="outline"
+                  onClick={() => handleOpenChange(false)}
                 >
                   Cancel
-                </button>
-                <button 
+                </SxButton>
+                <SxButton
                   type="submit"
-                  disabled={isLoading}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
+                  sxVariant="primary"
+                  loading={isSubmitting}
                 >
-                  {isLoading ? 'Creating...' : 'Create Organization'}
-                </button>
-              </div>
+                  Create Organization
+                </SxButton>
+              </DialogFooter>
             </form>
-          </div>
-        </div>
-      )}
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
