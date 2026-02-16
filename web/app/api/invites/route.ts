@@ -36,7 +36,7 @@ export async function GET() {
           role: true,
           isActive: true,
           campusId: true,
-          organization: { select: { id: true, name: true } },
+          organization: { select: { id: true, organizationName: true } },
           campus: { select: { id: true, name: true, regionId: true } },
         },
         orderBy: { id: "desc" },
@@ -54,19 +54,19 @@ export async function GET() {
           expiresAt: true,
           createdBy: true,
           createdAt: true,
-          organization: { select: { name: true } },
+          organization: { select: { organizationName: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
       // Orgs dropdown (SUPER_ADMIN sees all, ORG_ADMIN sees own)
       isSuperAdmin
         ? prisma.organization.findMany({
-            select: { id: true, name: true },
-            orderBy: { name: "asc" },
+            select: { id: true, organizationName: true },
+            orderBy: { organizationName: "asc" },
           })
         : prisma.organization.findMany({
             where: { id: guard.organizationId },
-            select: { id: true, name: true },
+            select: { id: true, organizationName: true },
           }),
       // Regions dropdown (scoped to org)
       prisma.regionalOffice.findMany({

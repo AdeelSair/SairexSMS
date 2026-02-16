@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { generateOrganizationId } from "@/lib/id-generators";
 
 /**
  * POST /api/auth/signup
@@ -12,7 +13,7 @@ import bcrypt from "bcryptjs";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { fullName, email, password, inviteToken, orgName, orgCode } = body;
+    const { fullName, email, password, inviteToken, orgName, orgType } = body;
 
     // --- Shared validation ---
     if (!email || !password) {
@@ -100,40 +101,51 @@ export async function POST(request: Request) {
         {
           message: "Account created successfully",
           user: { id: user.id, email: user.email, role: user.role },
-          organizationName: invite.organization.name,
+          organizationName: invite.organization.organizationName,
         },
         { status: 201 }
       );
     }
 
     // ─── MODE 2: New organization signup (no token) ───
-    if (!orgName || !orgCode) {
+    if (!orgName) {
       return NextResponse.json(
-        { error: "Organization name and code are required" },
+        { error: "Organization name is required" },
         { status: 400 }
       );
     }
 
-    // Check if org code is taken
+    // Auto-generate slug from org name
+    const slug = orgName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    // Check if slug is taken
     const existingOrg = await prisma.organization.findUnique({
-      where: { orgCode },
+      where: { slug },
     });
 
     if (existingOrg) {
       return NextResponse.json(
-        { error: "This organization code is already taken" },
+        { error: "An organization with a similar name already exists. Please choose a different name." },
         { status: 409 }
       );
     }
 
     // Create org + user in a single transaction
+    const orgId = await generateOrganizationId();
+
     const result = await prisma.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
-          name: orgName,
-          orgCode,
-          subscriptionPlan: "FREE",
-          subscriptionStatus: "ACTIVE",
+          id: orgId,
+          organizationName: orgName,
+          displayName: orgName,
+          slug,
+          organizationType: orgType || "SCHOOL",
+          status: "PENDING",
         },
       });
 
@@ -158,7 +170,7 @@ export async function POST(request: Request) {
           email: result.user.email,
           role: result.user.role,
         },
-        organizationName: result.org.name,
+        organizationName: result.org.organizationName,
       },
       { status: 201 }
     );

@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   try {
     const invite = await prisma.inviteToken.findUnique({
       where: { token },
-      include: { organization: { select: { name: true } } },
+      include: { organization: { select: { organizationName: true } } },
     });
 
     if (!invite) {
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       email: invite.email,
       role: invite.role,
-      orgName: invite.organization.name,
+      orgName: invite.organization.organizationName,
     });
   } catch (error) {
     console.error("Invite validation error:", error);

@@ -52,10 +52,10 @@ export function scopeFilter(
  */
 export function resolveOrgId(
   guard: AuthUser,
-  bodyOrgId?: string | number | null
-): number {
+  bodyOrgId?: string | null
+): string {
   if (guard.role === "SUPER_ADMIN" && bodyOrgId) {
-    return typeof bodyOrgId === "string" ? parseInt(bodyOrgId, 10) : bodyOrgId;
+    return bodyOrgId;
   }
   return guard.organizationId;
 }
@@ -79,14 +79,14 @@ type CrossRefCheck = {
  * Returns null if all pass, or a 403 NextResponse describing the violation.
  */
 export async function validateCrossRefs(
-  orgId: number,
+  orgId: string,
   checks: CrossRefCheck[]
 ): Promise<NextResponse | null> {
   for (const check of checks) {
     // Skip if id is falsy (optional refs)
     if (!check.id) continue;
 
-    let record: { organizationId: number } | null = null;
+    let record: { organizationId: string } | null = null;
 
     switch (check.model) {
       case "campus":
@@ -145,7 +145,7 @@ export async function validateCrossRefs(
  */
 export function assertOwnership(
   guard: AuthUser,
-  recordOrgId: number
+  recordOrgId: string
 ): NextResponse | null {
   if (guard.role === "SUPER_ADMIN") return null;
 

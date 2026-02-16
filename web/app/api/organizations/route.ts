@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, requireRole } from "@/lib/auth-guard";
+import { generateOrganizationId } from "@/lib/id-generators";
+import { createOrganizationSchema } from "@/lib/validations";
 
 // 1. GET: Fetch organizations (SUPER_ADMIN sees all, others see only their own)
 export async function GET() {
@@ -34,21 +36,33 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, orgCode, plan } = body;
 
-    if (!name || !orgCode) {
+    // Validate with Zod
+    const parsed = createOrganizationSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Name and Code are required" },
+        { errors: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
 
+    // Business rule: slug must be unique in the database
+    const existingSlug = await prisma.organization.findUnique({
+      where: { slug: parsed.data.slug },
+    });
+    if (existingSlug) {
+      return NextResponse.json(
+        { errors: { slug: ["This slug is already taken"] } },
+        { status: 409 }
+      );
+    }
+
+    const orgId = await generateOrganizationId();
+
     const newOrg = await prisma.organization.create({
       data: {
-        name,
-        orgCode,
-        subscriptionPlan: plan || "FREE",
-        subscriptionStatus: "ACTIVE",
+        id: orgId,
+        ...parsed.data,
       },
     });
 

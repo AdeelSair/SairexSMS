@@ -48,7 +48,7 @@ export default async function LandscapeChallan({
                 LOGO
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-bold leading-tight uppercase">{challan.organization.name}</h3>
+                <h3 className="text-sm font-bold leading-tight uppercase">{challan.organization.organizationName}</h3>
                 <p className="text-[10px] font-semibold">{challan.campus.name}</p>
               </div>
             </div>
@@ -63,7 +63,7 @@ export default async function LandscapeChallan({
                 <strong>Bank:</strong> Habib Bank Limited (HBL)
               </p>
               <p>
-                <strong>A/C Title:</strong> {challan.organization.name} Main Account
+                <strong>A/C Title:</strong> {challan.organization.organizationName} Main Account
               </p>
               <p>
                 <strong>A/C No:</strong> 1234-56789012-03

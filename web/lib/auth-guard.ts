@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 export type AuthUser = {
   email: string;
   role: string;
-  organizationId: number;
+  organizationId: string;
   campusId: number | null;
 };
 
@@ -39,7 +39,7 @@ export async function requireAuth(): Promise<AuthUser | NextResponse> {
   return {
     email: user.email,
     role: user.role as string,
-    organizationId: Number(user.organizationId),
+    organizationId: String(user.organizationId),
     campusId: user.campusId ? Number(user.campusId) : null,
   };
 }
