@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-guard";
+import { scopeFilter, resolveOrgId } from "@/lib/tenant";
 
 // 1. GET: Fetch regional offices (tenant-scoped)
 export async function GET() {
@@ -8,8 +9,7 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard;
 
   try {
-    const where =
-      guard.role === "SUPER_ADMIN" ? {} : { organizationId: guard.organizationId };
+    const where = scopeFilter(guard);
 
     const regions = await prisma.regionalOffice.findMany({
       where,
@@ -33,10 +33,7 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     // Enforce tenant boundary: use session orgId unless SUPER_ADMIN overrides
-    const orgId =
-      guard.role === "SUPER_ADMIN" && body.organizationId
-        ? parseInt(body.organizationId)
-        : guard.organizationId;
+    const orgId = resolveOrgId(guard, body.organizationId);
 
     const region = await prisma.regionalOffice.create({
       data: {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-guard";
+import { scopeFilter, resolveOrgId, validateCrossRefs } from "@/lib/tenant";
 
 // 1. GET: Fetch campuses (tenant-scoped)
 export async function GET() {
@@ -8,8 +9,7 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard;
 
   try {
-    const where =
-      guard.role === "SUPER_ADMIN" ? {} : { organizationId: guard.organizationId };
+    const where = scopeFilter(guard);
 
     const campuses = await prisma.campus.findMany({
       where,
@@ -32,10 +32,16 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const orgId =
-      guard.role === "SUPER_ADMIN" && body.organizationId
-        ? parseInt(body.organizationId)
-        : guard.organizationId;
+    const orgId = resolveOrgId(guard, body.organizationId);
+    const regionId = body.regionId ? parseInt(body.regionId) : null;
+
+    // Cross-reference validation: ensure region belongs to the same org
+    if (regionId) {
+      const crossRefError = await validateCrossRefs(orgId, [
+        { model: "regionalOffice", id: regionId, label: "Regional Office" },
+      ]);
+      if (crossRefError) return crossRefError;
+    }
 
     const campus = await prisma.campus.create({
       data: {
@@ -44,7 +50,7 @@ export async function POST(request: Request) {
         campusSlug: body.campusCode.toLowerCase(),
         city: body.city,
         organizationId: orgId,
-        regionId: body.regionId ? parseInt(body.regionId) : null,
+        regionId,
       },
     });
     return NextResponse.json(campus, { status: 201 });

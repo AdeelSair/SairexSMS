@@ -1,11 +1,17 @@
 /**
- * SAIREX SMS — API Security Test Suite
- * Tests all routes for: auth enforcement, tenant scoping, role checks
+ * SAIREX SMS — API Security & Tenant Isolation Test Suite
+ * Tests all routes for: auth enforcement, tenant scoping, role checks,
+ * cross-reference validation, and campus-level isolation.
  *
  * Run with: npx tsx scripts/test-api-security.ts
+ *
+ * Prerequisites:
+ *   1. Dev server running (npm run dev)
+ *   2. SUPER_ADMIN account: admin@sairex-sms.com / Admin@123
+ *   3. (Optional) ORG_ADMIN account for cross-tenant tests
  */
 
-const BASE = "http://localhost:3000";
+const BASE_URL = "http://localhost:3000";
 
 type TestResult = {
   name: string;
@@ -14,9 +20,11 @@ type TestResult = {
   actual: string;
 };
 
-const results: TestResult[] = [];
+const allResults: TestResult[] = [];
 
-async function test(
+// ─── HELPERS ────────────────────────────────────────────────
+
+async function testRoute(
   name: string,
   method: string,
   path: string,
@@ -28,59 +36,81 @@ async function test(
     if (options?.cookie) headers["Cookie"] = options.cookie;
     if (options?.body) headers["Content-Type"] = "application/json";
 
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
       body: options?.body ? JSON.stringify(options.body) : undefined,
-      redirect: "manual", // Don't follow redirects — we want to see the 3xx
+      redirect: "manual",
     });
 
     const status = res.status;
     const pass = status === expectedStatus;
 
-    results.push({
-      name,
-      pass,
-      expected: `${expectedStatus}`,
-      actual: `${status}`,
-    });
+    allResults.push({ name, pass, expected: `${expectedStatus}`, actual: `${status}` });
+    return { status, res };
   } catch (err: any) {
-    results.push({
+    allResults.push({
       name,
       pass: false,
       expected: `${expectedStatus}`,
       actual: `ERROR: ${err.message}`,
     });
+    return { status: 0, res: null };
   }
 }
 
-async function getSessionCookie(): Promise<string> {
-  // Step 1: Get CSRF token
-  const csrfRes = await fetch(`${BASE}/api/auth/csrf`);
+async function fetchJson(
+  path: string,
+  cookie: string,
+  method = "GET",
+  body?: any
+): Promise<{ status: number; data: any }> {
+  const headers: Record<string, string> = { Cookie: cookie };
+  if (body) headers["Content-Type"] = "application/json";
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+    redirect: "manual",
+  });
+
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  return { status: res.status, data };
+}
+
+async function getSessionCookie(
+  email: string,
+  password: string
+): Promise<string> {
+  // Step 1: CSRF token
+  const csrfRes = await fetch(`${BASE_URL}/api/auth/csrf`);
   const csrfData = await csrfRes.json();
   const csrfToken = csrfData.csrfToken;
   const cookies = csrfRes.headers.getSetCookie?.() || [];
 
-  // Step 2: Sign in with credentials
-  const signInRes = await fetch(`${BASE}/api/auth/callback/credentials`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: cookies.join("; "),
-    },
-    body: new URLSearchParams({
-      csrfToken,
-      email: "admin@sairex-sms.com",
-      password: "Admin@123",
-    }),
-    redirect: "manual",
-  });
+  // Step 2: Sign in
+  const signInRes = await fetch(
+    `${BASE_URL}/api/auth/callback/credentials`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Cookie: cookies.join("; "),
+      },
+      body: new URLSearchParams({ csrfToken, email, password }),
+      redirect: "manual",
+    }
+  );
 
-  // Collect all set-cookie headers (session token lives here)
   const signInCookies = signInRes.headers.getSetCookie?.() || [];
   const allCookies = [...cookies, ...signInCookies];
 
-  // Build a cookie string from all received cookies
   const cookieMap = new Map<string, string>();
   for (const c of allCookies) {
     const [nameVal] = c.split(";");
@@ -88,22 +118,24 @@ async function getSessionCookie(): Promise<string> {
     cookieMap.set(name.trim(), valParts.join("=").trim());
   }
 
-  const cookieStr = Array.from(cookieMap.entries())
+  return Array.from(cookieMap.entries())
     .map(([k, v]) => `${k}=${v}`)
     .join("; ");
-
-  return cookieStr;
 }
+
+// ─── MAIN ───────────────────────────────────────────────────
 
 async function main() {
   console.log("==============================================");
-  console.log("  SAIREX SMS — API Security Test Suite");
+  console.log("  SAIREX SMS — Tenant Isolation Test Suite");
   console.log("==============================================\n");
 
-  // ─── PHASE 1: UNAUTHENTICATED ACCESS (should all return 401) ───
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 1: UNAUTHENTICATED ACCESS (all should → 401)
+  // ═══════════════════════════════════════════════════════════
   console.log("Phase 1: Unauthenticated access (expect 401)...");
 
-  const routes = [
+  const protectedRoutes = [
     ["GET", "/api/organizations"],
     ["POST", "/api/organizations"],
     ["GET", "/api/regions"],
@@ -122,8 +154,8 @@ async function main() {
     ["GET", "/api/cron/reminders"],
   ];
 
-  for (const [method, path] of routes) {
-    await test(
+  for (const [method, path] of protectedRoutes) {
+    await testRoute(
       `NO AUTH → ${method} ${path}`,
       method,
       path,
@@ -132,25 +164,27 @@ async function main() {
     );
   }
 
-  // ─── PHASE 2: AUTHENTICATED ACCESS (SUPER_ADMIN) ───
-  console.log("Phase 2: Authenticating as SUPER_ADMIN...");
-  let cookie: string;
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 2: AUTHENTICATED — SUPER_ADMIN SESSION
+  // ═══════════════════════════════════════════════════════════
+  console.log("\nPhase 2: Authenticating as SUPER_ADMIN...");
+  let saCookie: string;
   try {
-    cookie = await getSessionCookie();
-    if (!cookie || cookie.length < 20) {
-      console.error("  FAILED to get session cookie. Aborting Phase 2+3.");
+    saCookie = await getSessionCookie("admin@sairex-sms.com", "Admin@123");
+    if (!saCookie || saCookie.length < 20) {
+      console.error("  FAILED to obtain SUPER_ADMIN session. Aborting.\n");
       printResults();
       return;
     }
-    console.log("  Session cookie obtained.\n");
+    console.log("  Session obtained.\n");
   } catch (err: any) {
     console.error("  Auth error:", err.message);
     printResults();
     return;
   }
 
-  console.log("Phase 2: Authenticated GET requests (expect 200)...");
-
+  // Authenticated GETs should → 200
+  console.log("Phase 2a: Authenticated GET requests (expect 200)...");
   const getRoutes = [
     "/api/organizations",
     "/api/regions",
@@ -161,78 +195,238 @@ async function main() {
     "/api/finance/challans",
     "/api/cron/reminders",
   ];
-
   for (const path of getRoutes) {
-    await test(`AUTH → GET ${path}`, "GET", path, 200, { cookie });
+    await testRoute(`AUTH → GET ${path}`, "GET", path, 200, { cookie: saCookie });
   }
 
-  // ─── PHASE 3: TENANT SCOPING — verify data comes back ───
-  console.log("Phase 3: Verifying data shape & tenant scoping...");
+  // Verify returns arrays
+  console.log("Phase 2b: Data shape validation...");
+  for (const path of ["/api/organizations", "/api/students", "/api/finance/challans"]) {
+    const { data } = await fetchJson(path, saCookie);
+    const isArr = Array.isArray(data);
+    allResults.push({
+      name: `SHAPE → ${path} returns array`,
+      pass: isArr,
+      expected: "array",
+      actual: isArr ? `array(${data.length})` : typeof data,
+    });
+  }
 
-  // Fetch organizations and verify it returns an array
-  const orgsRes = await fetch(`${BASE}/api/organizations`, {
-    headers: { Cookie: cookie },
-  });
-  const orgs = await orgsRes.json();
-  const orgsIsArray = Array.isArray(orgs);
-  results.push({
-    name: "SCOPE → /api/organizations returns array",
-    pass: orgsIsArray,
-    expected: "array",
-    actual: orgsIsArray ? `array(${orgs.length})` : typeof orgs,
-  });
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 3: TENANT ISOLATION — CROSS-REFERENCE VALIDATION
+  // ═══════════════════════════════════════════════════════════
+  console.log("\nPhase 3: Cross-reference validation...");
 
-  // Fetch students and verify array
-  const studRes = await fetch(`${BASE}/api/students`, {
-    headers: { Cookie: cookie },
+  // 3a. Create two test organizations
+  const ts = Date.now();
+  const { data: orgA } = await fetchJson("/api/organizations", saCookie, "POST", {
+    name: `IsolationTestOrg_A_${ts}`,
+    orgCode: `ISO-A-${ts}`,
+    plan: "FREE",
   });
-  const students = await studRes.json();
-  const studIsArray = Array.isArray(students);
-  results.push({
-    name: "SCOPE → /api/students returns array",
-    pass: studIsArray,
-    expected: "array",
-    actual: studIsArray ? `array(${students.length})` : typeof students,
-  });
-
-  // Fetch challans and verify array
-  const challRes = await fetch(`${BASE}/api/finance/challans`, {
-    headers: { Cookie: cookie },
-  });
-  const challans = await challRes.json();
-  const challIsArray = Array.isArray(challans);
-  results.push({
-    name: "SCOPE → /api/finance/challans returns array",
-    pass: challIsArray,
-    expected: "array",
-    actual: challIsArray ? `array(${challans.length})` : typeof challans,
+  const { data: orgB } = await fetchJson("/api/organizations", saCookie, "POST", {
+    name: `IsolationTestOrg_B_${ts}`,
+    orgCode: `ISO-B-${ts}`,
+    plan: "FREE",
   });
 
-  // ─── PHASE 4: ROLE CHECK — verify SUPER_ADMIN can create org ───
+  if (!orgA?.id || !orgB?.id) {
+    console.error("  Could not create test orgs. Skipping cross-ref tests.");
+  } else {
+    console.log(`  Created Org A (id=${orgA.id}) and Org B (id=${orgB.id})`);
+
+    // 3b. Create a campus in Org A
+    const { data: campusA } = await fetchJson("/api/campuses", saCookie, "POST", {
+      name: `Campus A ${ts}`,
+      campusCode: `CA-${ts}`,
+      city: "Lahore",
+      organizationId: orgA.id,
+    });
+
+    // 3c. Create a region in Org A
+    const { data: regionA } = await fetchJson("/api/regions", saCookie, "POST", {
+      name: `Region A ${ts}`,
+      city: "Karachi",
+      organizationId: orgA.id,
+    });
+
+    // 3d. Create a fee head in Org A
+    const { data: headA } = await fetchJson("/api/finance/heads", saCookie, "POST", {
+      name: `Tuition ${ts}`,
+      type: "RECURRING",
+      organizationId: orgA.id,
+    });
+
+    if (campusA?.id && regionA?.id && headA?.id) {
+      console.log(`  Created Campus A (${campusA.id}), Region A (${regionA.id}), FeeHead A (${headA.id})\n`);
+
+      // ── TEST: Create student in Org B referencing Org A's campus → expect 403
+      const { status: s1, data: d1 } = await fetchJson(
+        "/api/students",
+        saCookie,
+        "POST",
+        {
+          fullName: "Cross-Org Student",
+          admissionNo: `XREF-STU-${ts}`,
+          grade: "Grade 10",
+          organizationId: orgB.id,
+          campusId: campusA.id, // Belongs to Org A!
+        }
+      );
+      allResults.push({
+        name: "XREF → Student with cross-org campusId → 403",
+        pass: s1 === 403,
+        expected: "403",
+        actual: `${s1}`,
+      });
+
+      // ── TEST: Create campus in Org B referencing Org A's region → expect 403
+      const { status: s2 } = await fetchJson(
+        "/api/campuses",
+        saCookie,
+        "POST",
+        {
+          name: `Cross Campus ${ts}`,
+          campusCode: `XC-${ts}`,
+          city: "Islamabad",
+          organizationId: orgB.id,
+          regionId: regionA.id, // Belongs to Org A!
+        }
+      );
+      allResults.push({
+        name: "XREF → Campus with cross-org regionId → 403",
+        pass: s2 === 403,
+        expected: "403",
+        actual: `${s2}`,
+      });
+
+      // ── TEST: Create fee structure in Org B referencing Org A's campus + head → 403
+      const { status: s3 } = await fetchJson(
+        "/api/finance/structures",
+        saCookie,
+        "POST",
+        {
+          name: `Cross Rule ${ts}`,
+          amount: "5000",
+          frequency: "MONTHLY",
+          organizationId: orgB.id,
+          campusId: campusA.id,  // Belongs to Org A!
+          feeHeadId: headA.id,   // Belongs to Org A!
+        }
+      );
+      allResults.push({
+        name: "XREF → FeeStructure with cross-org campus+head → 403",
+        pass: s3 === 403,
+        expected: "403",
+        actual: `${s3}`,
+      });
+
+      // ── TEST: Generate challans in Org B referencing Org A's campus → 403
+      const { status: s4 } = await fetchJson(
+        "/api/finance/challans",
+        saCookie,
+        "POST",
+        {
+          organizationId: orgB.id,
+          campusId: campusA.id, // Belongs to Org A!
+          targetGrade: "Grade 10",
+          billingMonth: "January",
+          dueDate: "2026-03-15",
+        }
+      );
+      allResults.push({
+        name: "XREF → Challans with cross-org campusId → 403",
+        pass: s4 === 403,
+        expected: "403",
+        actual: `${s4}`,
+      });
+
+      // ── TEST: Same-org refs should succeed (happy path)
+      const { status: s5 } = await fetchJson(
+        "/api/students",
+        saCookie,
+        "POST",
+        {
+          fullName: "Same-Org Student",
+          admissionNo: `SAME-STU-${ts}`,
+          grade: "Grade 10",
+          organizationId: orgA.id,
+          campusId: campusA.id, // Same org — should pass!
+        }
+      );
+      allResults.push({
+        name: "XREF → Student with same-org campusId → 201",
+        pass: s5 === 201,
+        expected: "201",
+        actual: `${s5}`,
+      });
+
+      // ── TEST: Fee structure with same-org refs should succeed
+      const { status: s6 } = await fetchJson(
+        "/api/finance/structures",
+        saCookie,
+        "POST",
+        {
+          name: `Same-Org Rule ${ts}`,
+          amount: "3000",
+          frequency: "MONTHLY",
+          organizationId: orgA.id,
+          campusId: campusA.id, // Same org
+          feeHeadId: headA.id,  // Same org
+        }
+      );
+      allResults.push({
+        name: "XREF → FeeStructure with same-org refs → 201",
+        pass: s6 === 201,
+        expected: "201",
+        actual: `${s6}`,
+      });
+    } else {
+      console.error("  Could not create test entities for cross-ref validation.");
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 4: ROLE-BASED ACCESS
+  // ═══════════════════════════════════════════════════════════
   console.log("Phase 4: Role-based access checks...");
 
-  await test(
+  await testRoute(
     "ROLE → SUPER_ADMIN can POST /api/organizations",
     "POST",
     "/api/organizations",
     201,
     {
-      cookie,
+      cookie: saCookie,
       body: {
-        name: "Test Org (Security Check)",
-        orgCode: `TEST-SEC-${Date.now()}`,
+        name: `Role Test Org ${ts}`,
+        orgCode: `ROLE-TEST-${ts}`,
         plan: "FREE",
       },
     }
   );
 
-  // ─── PRINT RESULTS ───
-  printResults();
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 5: OWNERSHIP VERIFICATION (PUT routes)
+  // ═══════════════════════════════════════════════════════════
+  console.log("\nPhase 5: Ownership verification on PUT...");
 
-  // ─── CLEANUP: Delete the test org ───
-  try {
-    // No delete endpoint, but that's fine — it's just a test record
-  } catch {}
+  // Try to pay a non-existent challan → 404
+  await testRoute(
+    "OWNERSHIP → PUT challan with invalid id → 404",
+    "PUT",
+    "/api/finance/challans",
+    404,
+    {
+      cookie: saCookie,
+      body: { challanId: 999999, paymentMethod: "CASH" },
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════
+  // PRINT RESULTS
+  // ═══════════════════════════════════════════════════════════
+  printResults();
 }
 
 function printResults() {
@@ -243,9 +437,8 @@ function printResults() {
   let passed = 0;
   let failed = 0;
 
-  for (const r of results) {
+  for (const r of allResults) {
     const icon = r.pass ? "PASS" : "FAIL";
-    const marker = r.pass ? "  " : "  ";
     console.log(`  ${icon} | ${r.name}`);
     if (!r.pass) {
       console.log(`       Expected: ${r.expected}, Got: ${r.actual}`);
@@ -255,13 +448,14 @@ function printResults() {
   }
 
   console.log("\n----------------------------------------------");
-  console.log(`  Total: ${results.length} | Passed: ${passed} | Failed: ${failed}`);
+  console.log(`  Total: ${allResults.length} | Passed: ${passed} | Failed: ${failed}`);
   console.log("----------------------------------------------");
 
   if (failed === 0) {
     console.log("\n  ALL TESTS PASSED!\n");
   } else {
     console.log(`\n  ${failed} TEST(S) FAILED — see details above.\n`);
+    process.exit(1);
   }
 }
 

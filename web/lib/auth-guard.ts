@@ -8,6 +8,7 @@ export type AuthUser = {
   email: string;
   role: string;
   organizationId: number;
+  campusId: number | null;
 };
 
 /**
@@ -39,6 +40,7 @@ export async function requireAuth(): Promise<AuthUser | NextResponse> {
     email: user.email,
     role: user.role as string,
     organizationId: Number(user.organizationId),
+    campusId: user.campusId ? Number(user.campusId) : null,
   };
 }
 

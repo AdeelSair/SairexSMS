@@ -25,6 +25,7 @@ export const authConfig = {
       if (user) {
         token.role = (user as any).role;
         token.organizationId = (user as any).organizationId;
+        token.campusId = (user as any).campusId ?? null;
       }
       return token;
     },
@@ -32,6 +33,7 @@ export const authConfig = {
       if (session.user) {
         (session.user as any).role = token.role;
         (session.user as any).organizationId = token.organizationId;
+        (session.user as any).campusId = token.campusId ?? null;
       }
       return session;
     },

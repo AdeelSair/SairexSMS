@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-guard";
+import { scopeFilter, resolveOrgId, validateCrossRefs } from "@/lib/tenant";
 
 // 1. GET: Fetch all students (tenant-scoped)
 export async function GET() {
@@ -8,8 +9,7 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard;
 
   try {
-    const where =
-      guard.role === "SUPER_ADMIN" ? {} : { organizationId: guard.organizationId };
+    const where = scopeFilter(guard, { hasCampus: true });
 
     const students = await prisma.student.findMany({
       where,
@@ -36,10 +36,14 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const orgId =
-      guard.role === "SUPER_ADMIN" && body.organizationId
-        ? parseInt(body.organizationId)
-        : guard.organizationId;
+    const orgId = resolveOrgId(guard, body.organizationId);
+    const campusId = parseInt(body.campusId);
+
+    // Cross-reference validation: ensure campus belongs to the same org
+    const crossRefError = await validateCrossRefs(orgId, [
+      { model: "campus", id: campusId, label: "Campus" },
+    ]);
+    if (crossRefError) return crossRefError;
 
     const student = await prisma.student.create({
       data: {
@@ -47,7 +51,7 @@ export async function POST(request: Request) {
         admissionNo: body.admissionNo,
         grade: body.grade,
         organizationId: orgId,
-        campusId: parseInt(body.campusId),
+        campusId,
         feeStatus: "Unpaid",
       },
     });

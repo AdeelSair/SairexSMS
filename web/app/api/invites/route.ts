@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, requireRole } from "@/lib/auth-guard";
+import { scopeFilter, resolveOrgId, assertOwnership } from "@/lib/tenant";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
@@ -24,7 +25,7 @@ export async function GET() {
 
   try {
     const isSuperAdmin = guard.role === "SUPER_ADMIN";
-    const where = isSuperAdmin ? {} : { organizationId: guard.organizationId };
+    const where = scopeFilter(guard);
 
     const [users, invites, organizations, regions, campuses] = await Promise.all([
       prisma.user.findMany({
@@ -124,11 +125,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Determine target org
-    const targetOrgId =
-      guard.role === "SUPER_ADMIN" && organizationId
-        ? parseInt(organizationId)
-        : guard.organizationId;
+    // Determine target org (tenant boundary enforced)
+    const targetOrgId = resolveOrgId(guard, organizationId);
 
     // Check if user already exists
     const existing = await prisma.user.findUnique({
@@ -252,12 +250,8 @@ export async function PUT(request: Request) {
     }
 
     // Tenant boundary: ORG_ADMIN can only manage users in their org
-    if (
-      guard.role !== "SUPER_ADMIN" &&
-      targetUser.organizationId !== guard.organizationId
-    ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const ownershipError = assertOwnership(guard, targetUser.organizationId);
+    if (ownershipError) return ownershipError;
 
     // Prevent non-SUPER_ADMIN from deactivating SUPER_ADMIN
     if (targetUser.role === "SUPER_ADMIN" && guard.role !== "SUPER_ADMIN") {

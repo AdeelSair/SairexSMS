@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyParent } from "@/lib/notifications";
 import { requireAuth, requireRole } from "@/lib/auth-guard";
+import { scopeFilter } from "@/lib/tenant";
 
 // GET: Send fee reminders for challans due in 3 days (SUPER_ADMIN or ORG_ADMIN only)
 export async function GET() {
@@ -22,16 +23,13 @@ export async function GET() {
 
     // Tenant-scoped: only send reminders for the user's org (SUPER_ADMIN sees all)
     const where: any = {
+      ...scopeFilter(guard, { hasCampus: true }),
       status: "UNPAID",
       dueDate: {
         gte: startOfDay,
         lte: endOfDay,
       },
     };
-
-    if (guard.role !== "SUPER_ADMIN") {
-      where.organizationId = guard.organizationId;
-    }
 
     const pendingChallans = await prisma.feeChallan.findMany({
       where,

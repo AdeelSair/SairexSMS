@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-guard";
+import { scopeFilter, resolveOrgId } from "@/lib/tenant";
 
 // 1. GET: Fetch fee categories (tenant-scoped)
 export async function GET() {
@@ -8,8 +9,7 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard;
 
   try {
-    const where =
-      guard.role === "SUPER_ADMIN" ? {} : { organizationId: guard.organizationId };
+    const where = scopeFilter(guard);
 
     const heads = await prisma.feeHead.findMany({
       where,
@@ -33,10 +33,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const orgId =
-      guard.role === "SUPER_ADMIN" && body.organizationId
-        ? parseInt(body.organizationId)
-        : guard.organizationId;
+    const orgId = resolveOrgId(guard, body.organizationId);
 
     const head = await prisma.feeHead.create({
       data: {
