@@ -1,13 +1,4 @@
 // ─── Organization Validation Schemas ─────────────────────────────────────────
-// Centralized Zod validation for the Organization module.
-// Usage:
-//   import { createOrganizationSchema, PAKISTAN_PROVINCES } from "@/lib/validations";
-//
-//   const result = createOrganizationSchema.safeParse(requestBody);
-//   if (!result.success) {
-//     return NextResponse.json({ errors: result.error.flatten().fieldErrors }, { status: 400 });
-//   }
-//   const validData = result.data;
 
 // Organization
 export {
@@ -43,3 +34,24 @@ export {
   type UpdateOrganizationAddressInput,
   type UpdateOrganizationAddressData,
 } from "./organization-address";
+
+// Signup / Register
+export {
+  signupSchema,
+  type SignupInput,
+  type SignupData,
+} from "./signup";
+
+// Onboarding
+export {
+  onboardingOrganizationSchema,
+  onboardingContactSchema,
+  onboardingAddressSchema,
+  ONBOARDING_ORGANIZATION_TYPE,
+  type OnboardingOrganizationInput,
+  type OnboardingOrganizationData,
+  type OnboardingContactInput,
+  type OnboardingContactData,
+  type OnboardingAddressInput,
+  type OnboardingAddressData,
+} from "./onboarding";

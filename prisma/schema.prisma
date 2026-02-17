@@ -1,4 +1,4 @@
-// This is your blueprint for SAIREX SMS
+// SAIREX SMS — Enterprise SaaS Onboarding + Multi-Tenant RBAC Schema
 
 generator client {
   provider = "prisma-client-py"
@@ -14,101 +14,238 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── ENUMS ───────────────────────────────────────────────────────────────────
+////////////////////////////////////////////////////////////
+/// ENUMS
+////////////////////////////////////////////////////////////
+
+enum PlatformRole {
+  SUPER_ADMIN
+  SUPPORT
+}
+
+enum MembershipRole {
+  ORG_ADMIN
+  CAMPUS_ADMIN
+  TEACHER
+  ACCOUNTANT
+  PARENT
+  STAFF
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
 
 enum OrganizationType {
   SCHOOL
   COLLEGE
   UNIVERSITY
-  COMPANY
+  ACADEMY
   NGO
   OTHER
 }
 
 enum OrganizationStatus {
+  DRAFT
+  PROFILE_PENDING
   ACTIVE
-  PENDING
   SUSPENDED
+}
+
+enum OnboardingStep {
+  ACCOUNT_CREATED
+  EMAIL_VERIFIED
+  ORG_CREATED
+  PROFILE_COMPLETED
+  COMPLETED
 }
 
 enum AddressType {
   HEAD_OFFICE
   BILLING
-  BRANCH
+  CAMPUS
+  OTHER
 }
 
-// ─── 1. Organization (The Tenant Root) ───────────────────────────────────────
+////////////////////////////////////////////////////////////
+/// USER (GLOBAL IDENTITY)
+////////////////////////////////////////////////////////////
+
+model User {
+  id                 Int       @id @default(autoincrement())
+  email              String    @unique
+  password           String
+  name               String?
+  isActive           Boolean   @default(false)
+
+  emailVerifiedAt    DateTime?
+  emailVerifyToken   String?   @unique
+  emailVerifyExpires DateTime?
+
+  platformRole       PlatformRole?
+
+  tokenVersion       Int       @default(0)
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  memberships        Membership[]
+  createdOrgs        Organization[]     @relation("OrgCreator")
+  sentInvitations    Invitation[]
+  resetTokens        PasswordResetToken[]
+}
+
+////////////////////////////////////////////////////////////
+/// ORGANIZATION ID SEQUENCE (Race-safe)
+////////////////////////////////////////////////////////////
+
+model OrganizationSequence {
+  id        Int @id @default(1)
+  lastValue Int @default(0)
+}
+
+////////////////////////////////////////////////////////////
+/// ORGANIZATION (TENANT ROOT)
+////////////////////////////////////////////////////////////
 
 model Organization {
-  id                  String             @id @db.VarChar(11) // Format: ORG-00001, auto-generated in app layer
-  organizationName    String             @db.VarChar(150)    // Legal name: letters, numbers, spaces, .&-
-  displayName         String             @db.VarChar(100)    // UI display name (any UTF-8)
-  slug                String             @unique @db.VarChar(60) // Lowercase, ^[a-z0-9-]+$
-  organizationType    OrganizationType
-  registrationNumber  String?            @db.VarChar(30)     // SECP / board reg (alphanumeric, min 5)
-  taxNumber           String?            @db.VarChar(15)     // NTN / GST format
-  logoUrl             String?                                // Valid URL (HTTPS recommended)
-  websiteUrl          String?                                // Valid URL (must include protocol)
-  timeZone            String             @default("Asia/Karachi") // IANA TZ
-  defaultLanguage     String             @default("en") @db.VarChar(5) // ISO code: en, ur
-  status              OrganizationStatus @default(PENDING)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  id                String             @id @db.VarChar(11)
+  organizationName  String
+  displayName       String
+  slug              String             @unique
+
+  organizationType  OrganizationType
+  status            OrganizationStatus @default(DRAFT)
+
+  onboardingStep    OnboardingStep     @default(ACCOUNT_CREATED)
+
+  timeZone          String             @default("Asia/Karachi")
+  defaultLanguage   String             @default("en")
+
+  createdByUserId   Int
+  createdBy         User               @relation("OrgCreator", fields: [createdByUserId], references: [id])
+
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   // Relations
+  memberships       Membership[]
+  invitations       Invitation[]
+
+  profile           OrganizationProfile?
   contacts          OrganizationContact[]
   addresses         OrganizationAddress[]
+  bankAccounts      OrganizationBank[]
+
   regionalOffices   RegionalOffice[]
   campuses          Campus[]
-  users             User[]
   students          Student[]
   feeHeads          FeeHead[]
   feeStructures     FeeStructure[]
   feeChallans       FeeChallan[]
-  inviteTokens      InviteToken[]
 }
 
-// ─── 2. Organization Contact ─────────────────────────────────────────────────
+////////////////////////////////////////////////////////////
+/// ORGANIZATION PROFILE (LEGAL + CORE INFO)
+////////////////////////////////////////////////////////////
+
+model OrganizationProfile {
+  id                  Int       @id @default(autoincrement())
+  organizationId      String    @unique
+
+  legalName           String?
+  registrationNumber  String?
+  taxNumber           String?
+  establishedDate     DateTime?
+
+  organizationEmail   String?
+  organizationPhone   String?
+  websiteUrl          String?
+  logoUrl             String?
+
+  organization        Organization @relation(fields: [organizationId], references: [id])
+}
+
+////////////////////////////////////////////////////////////
+/// ORGANIZATION CONTACTS
+////////////////////////////////////////////////////////////
 
 model OrganizationContact {
   id              Int          @id @default(autoincrement())
-  organizationId  String       @db.VarChar(11)
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  contactName     String       @db.VarChar(120)    // Letters & spaces, min 3
-  designation     String?      @db.VarChar(100)    // e.g., Director
-  primaryPhone    String       @db.VarChar(16)     // E.164: ^\+[1-9]\d{7,14}$
-  secondaryPhone  String?      @db.VarChar(16)     // E.164, must differ from primary
-  whatsappNumber  String?      @db.VarChar(16)     // E.164
-  primaryEmail    String       @db.VarChar(255)    // Valid email, lowercase normalized
-  billingEmail    String?      @db.VarChar(255)    // For invoices
-  supportEmail    String?      @db.VarChar(255)    // Public support
-  isPrimary       Boolean      @default(false)     // Only ONE true per org
+  organizationId  String
+
+  name            String
+  designation     String?
+  email           String?
+  phone           String?
+
+  isPrimary       Boolean      @default(false)
+
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
-// ─── 3. Organization Address ─────────────────────────────────────────────────
+////////////////////////////////////////////////////////////
+/// ORGANIZATION ADDRESSES
+////////////////////////////////////////////////////////////
 
 model OrganizationAddress {
   id              Int          @id @default(autoincrement())
-  organizationId  String       @db.VarChar(11)
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  addressType     AddressType                      // HEAD_OFFICE, BILLING, BRANCH
-  country         String       @default("PK") @db.VarChar(2)  // ISO-3166-1 alpha-2
-  provinceState   String       @db.VarChar(100)    // Punjab, Sindh, KPK, etc.
-  city            String       @db.VarChar(100)
-  areaLocality    String?      @db.VarChar(120)    // Town / sector
-  postalCode      String?      @db.VarChar(12)     // Country-specific (alphanumeric)
-  addressLine1    String       @db.VarChar(150)    // Street address, min 5
-  addressLine2    String?      @db.VarChar(150)    // Building / floor
-  latitude        Decimal?                         // -90 → +90
-  longitude       Decimal?                         // -180 → +180
-  isPrimary       Boolean      @default(false)     // One primary per type recommended
+  organizationId  String
+
+  type            AddressType
+
+  country         String
+  province        String
+  city            String
+  area            String?
+  postalCode      String?
+
+  addressLine1    String
+  addressLine2    String?
+
+  isPrimary       Boolean      @default(false)
+
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
-// 2. Regional Office (Optional Tier)
+////////////////////////////////////////////////////////////
+/// ORGANIZATION BANK ACCOUNTS
+////////////////////////////////////////////////////////////
+
+model OrganizationBank {
+  id              Int          @id @default(autoincrement())
+  organizationId  String
+
+  accountTitle    String
+  bankName        String
+  branchName      String?
+  accountNumber   String
+  iban            String?
+  swiftCode       String?
+
+  isPrimary       Boolean      @default(false)
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+////////////////////////////////////////////////////////////
+/// REGIONAL OFFICE (Optional Tier)
+////////////////////////////////////////////////////////////
+
 model RegionalOffice {
   id              Int          @id @default(autoincrement())
   organizationId  String       @db.VarChar(11)
@@ -121,7 +258,10 @@ model RegionalOffice {
   campuses        Campus[]
 }
 
-// 3. Campus (Operational Unit)
+////////////////////////////////////////////////////////////
+/// CAMPUS (Operational Unit)
+////////////////////////////////////////////////////////////
+
 model Campus {
   id                Int             @id @default(autoincrement())
   organizationId    String          @db.VarChar(11)
@@ -136,67 +276,95 @@ model Campus {
   principalName     String?
   contactPhone      String?
   email             String?
-  academicStartMonth Int            @default(8) // August
+  academicStartMonth Int            @default(8)
   isMainCampus      Boolean         @default(false)
   status            String          @default("ACTIVE")
   createdAt         DateTime        @default(now())
-  deletedAt         DateTime?       // Soft delete
+  deletedAt         DateTime?
 
-  users             User[]
+  memberships       Membership[]
   students          Student[]
   feeStructures     FeeStructure[]
   feeChallans       FeeChallan[]
 }
 
-// 4. Users (Scoped Access)
-model User {
-  id              Int          @id @default(autoincrement())
-  organizationId  String       @db.VarChar(11)
-  organization    Organization @relation(fields: [organizationId], references: [id])
+////////////////////////////////////////////////////////////
+/// MEMBERSHIP (TENANT RBAC BRIDGE)
+////////////////////////////////////////////////////////////
+
+model Membership {
+  id              Int              @id @default(autoincrement())
+
+  userId          Int
+  organizationId  String
+
+  role            MembershipRole
+  status          MembershipStatus @default(ACTIVE)
+
   campusId        Int?
-  campus          Campus?      @relation(fields: [campusId], references: [id])
-  email           String       @unique
-  password        String
-  role            String       // SUPER_ADMIN, ORG_ADMIN, CAMPUS_ADMIN, TEACHER, PARENT
-  isActive        Boolean      @default(true)
 
-  resetTokens     PasswordResetToken[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id])
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  campus          Campus?          @relation(fields: [campusId], references: [id])
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
 }
 
-// 4b. Password Reset Tokens
-model PasswordResetToken {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  token     String   @unique
-  expiresAt DateTime
-  usedAt    DateTime? // Null until used, prevents reuse
-  createdAt DateTime @default(now())
-}
+////////////////////////////////////////////////////////////
+/// INVITATIONS
+////////////////////////////////////////////////////////////
 
-// 4c. Invite Tokens (Admin invites users to join their org)
-model InviteToken {
-  id              Int          @id @default(autoincrement())
+model Invitation {
+  id              Int              @id @default(autoincrement())
+
   email           String
-  role            String       // Role the invited user will receive
-  organizationId  String       @db.VarChar(11)
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  token           String       @unique
+  organizationId  String
+  role            MembershipRole
+
+  token           String           @unique
+
+  invitedById     Int
+  invitedBy       User             @relation(fields: [invitedById], references: [id])
+
   expiresAt       DateTime
-  usedAt          DateTime?    // Null until claimed
-  createdBy       String       // Email of the admin who sent it
-  createdAt       DateTime     @default(now())
+  acceptedAt      DateTime?
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+
+  createdAt       DateTime         @default(now())
+
+  @@index([organizationId])
 }
 
-// 5. Student
+////////////////////////////////////////////////////////////
+/// PASSWORD RESET TOKENS
+////////////////////////////////////////////////////////////
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+////////////////////////////////////////////////////////////
+/// STUDENT
+////////////////////////////////////////////////////////////
+
 model Student {
   id             Int      @id @default(autoincrement())
   fullName       String
   admissionNo    String   @unique
   grade          String
   feeStatus      String   @default("Unpaid")
-  
-  // The SaaS Links
+
   organizationId String       @db.VarChar(11)
   organization   Organization @relation(fields: [organizationId], references: [id])
   campusId       Int
@@ -205,47 +373,43 @@ model Student {
   feeChallans    FeeChallan[]
 }
 
-// --- FEE MODULE ---
+////////////////////////////////////////////////////////////
+/// FEE MODULE
+////////////////////////////////////////////////////////////
 
-// 1. Fee Heads (The "Categories" of Money)
-// Examples: "Tuition Fee", "Transport Fee", "Lab Charges"
 model FeeHead {
   id             Int          @id @default(autoincrement())
   organizationId String       @db.VarChar(11)
   organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String       // e.g., "Monthly Tuition"
-  type           String       // RECURRING or ONE_TIME
-  isSystemDefault Boolean     @default(false) // True if copied from Global Template
+  name           String
+  type           String
+  isSystemDefault Boolean     @default(false)
   createdAt      DateTime     @default(now())
 
   structures     FeeStructure[]
 }
 
-// 2. Fee Structure (The "Rules")
-// Links a Fee Head to an Amount and Frequency for a specific context
 model FeeStructure {
   id             Int          @id @default(autoincrement())
   organizationId String       @db.VarChar(11)
   campusId       Int
   organization   Organization @relation(fields: [organizationId], references: [id])
   campus         Campus       @relation(fields: [campusId], references: [id])
-  
+
   feeHeadId      Int
   feeHead        FeeHead      @relation(fields: [feeHeadId], references: [id])
-  
-  name           String       // e.g., "Class 10 Tuition - 2026"
+
+  name           String
   amount         Decimal      @default(0.00)
   currency       String       @default("PKR")
-  frequency      String       // MONTHLY, QUARTERLY, ANNUALLY, ONCE
-  
-  // Who does this apply to?
-  applicableGrade String?     // e.g., "Grade 10" (Optional filter)
-  
+  frequency      String
+
+  applicableGrade String?
+
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
 }
 
-// 3. Fee Challan (The "Bill" sent to Student)
 model FeeChallan {
   id             Int          @id @default(autoincrement())
   organizationId String       @db.VarChar(11)
@@ -254,17 +418,17 @@ model FeeChallan {
   organization   Organization @relation(fields: [organizationId], references: [id])
   campus         Campus       @relation(fields: [campusId], references: [id])
   student        Student      @relation(fields: [studentId], references: [id])
-  
-  challanNo      String       @unique // e.g., "CH-2026-0001"
+
+  challanNo      String       @unique
   issueDate      DateTime     @default(now())
   dueDate        DateTime
-  
+
   totalAmount    Decimal
   paidAmount     Decimal      @default(0.00)
-  status         String       @default("UNPAID") // UNPAID, PARTIAL, PAID, OVERDUE
-  
-  paymentMethod  String?      // CASH, BANK_TRANSFER, ONLINE
+  status         String       @default("UNPAID")
+
+  paymentMethod  String?
   paidAt         DateTime?
-  
-  generatedBy    String       // "SYSTEM_AUTO" or User ID
+
+  generatedBy    String
 }

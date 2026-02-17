@@ -1,44 +1,45 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendVerificationEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
-import { generateOrganizationId } from "@/lib/id-generators";
+import crypto from "crypto";
 
 /**
  * POST /api/auth/signup
  *
  * Two modes:
- *   1. No invite token → Creates a new Organization + User as ORG_ADMIN
- *   2. With invite token → Creates a User under the invited org with the assigned role
+ *   1. Invite flow  → inviteToken present → creates verified, active User + Membership
+ *   2. Register flow → no inviteToken → creates unverified User + sends verification email
+ *
+ * Organization creation happens later in the onboarding wizard (after email verification).
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { fullName, email, password, inviteToken, orgName, orgType } = body;
+    const { name, email, password, inviteToken } = body;
 
-    // --- Shared validation ---
-    if (!email || !password) {
+    if (!name || !email || !password) {
       return NextResponse.json(
-        { error: "Email and password are required" },
-        { status: 400 }
+        { error: "Name, email, and password are required" },
+        { status: 400 },
       );
     }
 
     if (password.length < 8) {
       return NextResponse.json(
         { error: "Password must be at least 8 characters" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Check if email is already registered
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: email.toLowerCase() },
     });
 
     if (existingUser) {
       return NextResponse.json(
         { error: "An account with this email already exists" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -46,139 +47,111 @@ export async function POST(request: Request) {
 
     // ─── MODE 1: Invited user (token present) ───
     if (inviteToken) {
-      const invite = await prisma.inviteToken.findUnique({
+      const invitation = await prisma.invitation.findUnique({
         where: { token: inviteToken },
         include: { organization: true },
       });
 
-      if (!invite) {
+      if (!invitation) {
         return NextResponse.json(
           { error: "Invalid invite link" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
-      if (invite.usedAt) {
+      if (invitation.acceptedAt) {
         return NextResponse.json(
           { error: "This invite has already been used" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
-      if (new Date() > invite.expiresAt) {
+      if (new Date() > invitation.expiresAt) {
         return NextResponse.json(
           { error: "This invite has expired. Please ask your admin for a new one." },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
-      // Verify the email matches the invite
-      if (invite.email.toLowerCase() !== email.toLowerCase()) {
+      if (invitation.email.toLowerCase() !== email.toLowerCase()) {
         return NextResponse.json(
           { error: "This invite was sent to a different email address" },
-          { status: 403 }
+          { status: 403 },
         );
       }
 
-      // Create user under the invited org + mark invite as used
-      const [user] = await prisma.$transaction([
-        prisma.user.create({
+      // Invite = proof of email ownership → auto-verify + activate
+      const result = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
           data: {
-            email: invite.email.toLowerCase(),
+            name,
+            email: invitation.email.toLowerCase(),
             password: hashedPassword,
-            role: invite.role,
-            organizationId: invite.organizationId,
             isActive: true,
+            emailVerifiedAt: new Date(),
           },
-        }),
-        prisma.inviteToken.update({
-          where: { id: invite.id },
-          data: { usedAt: new Date() },
-        }),
-      ]);
+        });
+
+        await tx.membership.create({
+          data: {
+            userId: user.id,
+            organizationId: invitation.organizationId,
+            role: invitation.role,
+            status: "ACTIVE",
+          },
+        });
+
+        await tx.invitation.update({
+          where: { id: invitation.id },
+          data: { acceptedAt: new Date() },
+        });
+
+        return user;
+      });
 
       return NextResponse.json(
         {
           message: "Account created successfully",
-          user: { id: user.id, email: user.email, role: user.role },
-          organizationName: invite.organization.organizationName,
+          user: { id: result.id, email: result.email },
+          organizationName: invitation.organization.organizationName,
+          verified: true,
         },
-        { status: 201 }
+        { status: 201 },
       );
     }
 
-    // ─── MODE 2: New organization signup (no token) ───
-    if (!orgName) {
-      return NextResponse.json(
-        { error: "Organization name is required" },
-        { status: 400 }
-      );
-    }
+    // ─── MODE 2: Self-registration (no invite) ───
+    // Create user as inactive + unverified, send verification email.
+    // Org creation deferred to onboarding wizard.
 
-    // Auto-generate slug from org name
-    const slug = orgName
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    const verifyToken = crypto.randomBytes(32).toString("hex");
+    const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Check if slug is taken
-    const existingOrg = await prisma.organization.findUnique({
-      where: { slug },
+    await prisma.user.create({
+      data: {
+        name,
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        isActive: false,
+        emailVerifyToken: verifyToken,
+        emailVerifyExpires: verifyExpires,
+      },
     });
 
-    if (existingOrg) {
-      return NextResponse.json(
-        { error: "An organization with a similar name already exists. Please choose a different name." },
-        { status: 409 }
-      );
-    }
-
-    // Create org + user in a single transaction
-    const orgId = await generateOrganizationId();
-
-    const result = await prisma.$transaction(async (tx) => {
-      const org = await tx.organization.create({
-        data: {
-          id: orgId,
-          organizationName: orgName,
-          displayName: orgName,
-          slug,
-          organizationType: orgType || "SCHOOL",
-          status: "PENDING",
-        },
-      });
-
-      const user = await tx.user.create({
-        data: {
-          email: email.toLowerCase(),
-          password: hashedPassword,
-          role: "ORG_ADMIN",
-          organizationId: org.id,
-          isActive: true,
-        },
-      });
-
-      return { org, user };
-    });
+    await sendVerificationEmail(email.toLowerCase(), verifyToken);
 
     return NextResponse.json(
       {
-        message: "Organization and account created successfully",
-        user: {
-          id: result.user.id,
-          email: result.user.email,
-          role: result.user.role,
-        },
-        organizationName: result.org.organizationName,
+        message: "Account created. Please check your email to verify your address.",
+        verified: false,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("Signup error:", error);
     return NextResponse.json(
       { error: "Failed to create account" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -4,14 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Building2, Globe, FileText } from "lucide-react";
+import { Plus, Hash } from "lucide-react";
 
 import { api } from "@/lib/api-client";
 import {
   createOrganizationSchema,
   ORGANIZATION_TYPE,
   ORGANIZATION_STATUS,
-  IANA_TIMEZONES,
   type CreateOrganizationInput,
 } from "@/lib/validations/organization";
 
@@ -38,7 +37,6 @@ import {
   FormLabel,
   FormControl,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,12 +58,9 @@ interface Organization {
   slug: string;
   organizationType: string;
   status: string;
+  onboardingStep: string;
   timeZone: string;
   defaultLanguage: string;
-  registrationNumber?: string;
-  taxNumber?: string;
-  logoUrl?: string;
-  websiteUrl?: string;
   createdAt: string;
 }
 
@@ -75,6 +70,14 @@ interface Organization {
    ══════════════════════════════════════════════════════════════ */
 
 const columns: SxColumn<Organization>[] = [
+  {
+    key: "id",
+    header: "ID",
+    mono: true,
+    render: (row) => (
+      <span className="font-data text-xs font-semibold text-primary">{row.id}</span>
+    ),
+  },
   {
     key: "organizationName",
     header: "Organization",
@@ -108,10 +111,14 @@ const columns: SxColumn<Organization>[] = [
     render: (row) => <SxStatusBadge status={row.status} />,
   },
   {
-    key: "timeZone",
-    header: "Timezone",
+    key: "onboardingStep",
+    header: "Onboarding",
     render: (row) => (
-      <span className="text-xs text-muted-foreground">{row.timeZone}</span>
+      <SxStatusBadge
+        variant={row.onboardingStep === "COMPLETED" ? "success" : "warning"}
+      >
+        {humanize(row.onboardingStep)}
+      </SxStatusBadge>
     ),
   },
   {
@@ -129,7 +136,10 @@ const columns: SxColumn<Organization>[] = [
    Helpers
    ══════════════════════════════════════════════════════════════ */
 
+const KEEP_UPPER = new Set(["NGO"]);
+
 function humanize(value: string): string {
+  if (KEEP_UPPER.has(value)) return value;
   return value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, " ");
 }
 
@@ -141,6 +151,7 @@ export default function OrganizationsPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [nextId, setNextId] = useState<string>("");
 
   /* ── Data fetching ──────────────────────────────────────── */
 
@@ -168,13 +179,9 @@ export default function OrganizationsPage() {
       displayName: "",
       slug: "",
       organizationType: "SCHOOL",
-      registrationNumber: "",
-      taxNumber: "",
-      logoUrl: "",
-      websiteUrl: "",
       timeZone: "Asia/Karachi",
       defaultLanguage: "en",
-      status: "PENDING",
+      status: "DRAFT",
     },
   });
 
@@ -190,9 +197,10 @@ export default function OrganizationsPage() {
     const result = await api.post<Organization>("/api/organizations", data);
 
     if (result.ok) {
-      toast.success("Organization created successfully");
+      toast.success(`Organization created — ${result.data.id}`);
       setIsDialogOpen(false);
       reset();
+      setNextId("");
       fetchOrgs();
     } else if (result.fieldErrors) {
       for (const [field, messages] of Object.entries(result.fieldErrors)) {
@@ -208,9 +216,17 @@ export default function OrganizationsPage() {
 
   /* ── Dialog open/close ──────────────────────────────────── */
 
-  const handleOpenChange = (open: boolean) => {
+  const handleOpenChange = async (open: boolean) => {
     setIsDialogOpen(open);
-    if (!open) reset();
+    if (open) {
+      const result = await api.get<{ nextId: string }>("/api/organizations/next-id");
+      if (result.ok) {
+        setNextId(result.data.nextId);
+      }
+    } else {
+      reset();
+      setNextId("");
+    }
   };
 
   /* ══════════════════════════════════════════════════════════
@@ -236,7 +252,7 @@ export default function OrganizationsPage() {
 
       {/* ── Data Table ────────────────────────────────────── */}
       <SxDataTable
-        columns={columns}
+        columns={columns as unknown as SxColumn<Record<string, unknown>>[]}
         data={orgs as unknown as Record<string, unknown>[]}
         loading={loading}
         emptyMessage="No organizations found. Create one to get started."
@@ -247,9 +263,8 @@ export default function OrganizationsPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>New Organization</DialogTitle>
-            <DialogDescription>
-              Create a new tenant. All fields are validated. A slug is
-              auto-generated from the name if left blank.
+            <DialogDescription className="sr-only">
+              Create a new organization tenant
             </DialogDescription>
           </DialogHeader>
 
@@ -258,17 +273,27 @@ export default function OrganizationsPage() {
               onSubmit={handleSubmit(onSubmit)}
               className="space-y-6"
             >
+              {/* ── Organization ID (auto-generated preview) ── */}
+              <div className="flex items-center gap-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-4 py-3">
+                <Hash size={16} className="shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Organization ID
+                  </p>
+                  <p className="font-data text-lg font-bold tracking-wide text-primary">
+                    {nextId || "Generating..."}
+                  </p>
+                </div>
+                <SxStatusBadge variant="info">Auto-generated</SxStatusBadge>
+              </div>
+
               {/* ── Section 1: Basic Information ───────────── */}
-              <SxFormSection
-                title="Basic Information"
-                description="Core identity fields for this organization"
-                columns={2}
-              >
+              <SxFormSection columns={2}>
                 <FormField
                   control={form.control}
                   name="organizationName"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-2">
                       <FormLabel>Organization Name</FormLabel>
                       <FormControl>
                         <Input
@@ -310,9 +335,6 @@ export default function OrganizationsPage() {
                           {...field}
                         />
                       </FormControl>
-                      <FormDescription>
-                        URL-friendly identifier (lowercase, hyphens only)
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -320,11 +342,7 @@ export default function OrganizationsPage() {
               </SxFormSection>
 
               {/* ── Section 2: Classification ──────────────── */}
-              <SxFormSection
-                title="Classification"
-                description="Type, status, and locale settings"
-                columns={2}
-              >
+              <SxFormSection columns={2}>
                 <FormField
                   control={form.control}
                   name="organizationType"
@@ -387,23 +405,9 @@ export default function OrganizationsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Timezone</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={field.onChange}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select timezone" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {IANA_TIMEZONES.map((tz) => (
-                            <SelectItem key={tz} value={tz}>
-                              {tz}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <Input value={field.value} readOnly disabled />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -416,99 +420,8 @@ export default function OrganizationsPage() {
                     <FormItem>
                       <FormLabel>Default Language</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="e.g. en, ur"
-                          {...field}
-                        />
+                        <Input value="English" readOnly disabled />
                       </FormControl>
-                      <FormDescription>
-                        ISO 639-1 language code
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </SxFormSection>
-
-              {/* ── Section 3: Registration & Legal ────────── */}
-              <SxFormSection
-                title="Registration & Legal"
-                description="Optional government and tax identifiers"
-                columns={2}
-              >
-                <FormField
-                  control={form.control}
-                  name="registrationNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Registration Number</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. REG12345"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="taxNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tax / NTN Number</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. 1234567-8"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </SxFormSection>
-
-              {/* ── Section 4: Web Presence ────────────────── */}
-              <SxFormSection
-                title="Web Presence"
-                description="Optional branding and online links"
-                columns={1}
-              >
-                <FormField
-                  control={form.control}
-                  name="websiteUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Website URL</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="https://example.com"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="logoUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Logo URL</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="https://cdn.example.com/logo.png"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Must be an HTTPS URL
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

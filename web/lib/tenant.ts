@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AuthUser } from "./auth-guard";
+import { AuthUser, isSuperAdmin } from "./auth-guard";
 import { prisma } from "./prisma";
 
 // ────────────────────────────────────────────────────────────
@@ -24,17 +24,16 @@ export function scopeFilter(
   guard: AuthUser,
   opts: ScopeOptions = {}
 ): Record<string, unknown> {
-  if (guard.role === "SUPER_ADMIN") return {};
+  if (isSuperAdmin(guard)) return {};
 
   const where: Record<string, unknown> = {
     organizationId: guard.organizationId,
   };
 
-  // CAMPUS_ADMIN, TEACHER, PARENT are campus-bound
   if (
     opts.hasCampus &&
     guard.campusId &&
-    !["ORG_ADMIN"].includes(guard.role)
+    !["ORG_ADMIN"].includes(guard.role ?? "")
   ) {
     where.campusId = guard.campusId;
   }
@@ -54,10 +53,10 @@ export function resolveOrgId(
   guard: AuthUser,
   bodyOrgId?: string | null
 ): string {
-  if (guard.role === "SUPER_ADMIN" && bodyOrgId) {
+  if (isSuperAdmin(guard) && bodyOrgId) {
     return bodyOrgId;
   }
-  return guard.organizationId;
+  return guard.organizationId ?? "";
 }
 
 // ────────────────────────────────────────────────────────────
@@ -83,7 +82,6 @@ export async function validateCrossRefs(
   checks: CrossRefCheck[]
 ): Promise<NextResponse | null> {
   for (const check of checks) {
-    // Skip if id is falsy (optional refs)
     if (!check.id) continue;
 
     let record: { organizationId: string } | null = null;
@@ -132,7 +130,7 @@ export async function validateCrossRefs(
     }
   }
 
-  return null; // All checks passed
+  return null;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -147,7 +145,7 @@ export function assertOwnership(
   guard: AuthUser,
   recordOrgId: string
 ): NextResponse | null {
-  if (guard.role === "SUPER_ADMIN") return null;
+  if (isSuperAdmin(guard)) return null;
 
   if (recordOrgId !== guard.organizationId) {
     return NextResponse.json(

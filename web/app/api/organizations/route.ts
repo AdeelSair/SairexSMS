@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, requireRole } from "@/lib/auth-guard";
+import { requireAuth, requireRole, isSuperAdmin } from "@/lib/auth-guard";
 import { generateOrganizationId } from "@/lib/id-generators";
 import { createOrganizationSchema } from "@/lib/validations";
 
@@ -10,8 +10,9 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard;
 
   try {
-    const where =
-      guard.role === "SUPER_ADMIN" ? {} : { id: guard.organizationId };
+    const where = isSuperAdmin(guard)
+      ? {}
+      : { id: guard.organizationId ?? undefined };
 
     const orgs = await prisma.organization.findMany({
       where,
@@ -37,7 +38,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Validate with Zod
     const parsed = createOrganizationSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -46,7 +46,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Business rule: slug must be unique in the database
     const existingSlug = await prisma.organization.findUnique({
       where: { slug: parsed.data.slug },
     });
@@ -62,6 +61,7 @@ export async function POST(request: Request) {
     const newOrg = await prisma.organization.create({
       data: {
         id: orgId,
+        createdByUserId: guard.id,
         ...parsed.data,
       },
     });

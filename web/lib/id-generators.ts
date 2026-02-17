@@ -1,38 +1,35 @@
 import { prisma } from "./prisma";
 
 /**
- * Generates the next Organization ID in the format ORG-XXXXX.
+ * Generates the next Organization ID using a database sequence.
  *
- * Strategy:
- *   1. Query the highest existing ID from the Organization table.
- *   2. Extract the numeric portion, increment by 1.
- *   3. Pad to 5 digits and return "ORG-00001", "ORG-00002", etc.
+ * Strategy (race-safe):
+ *   1. Upsert the OrganizationSequence row (ensures it exists).
+ *   2. Atomically increment lastValue using a raw SQL UPDATE ... RETURNING.
+ *   3. Format as ORG-XXXXX.
  *
- * Handles: empty table (starts at 00001), gaps in sequence (always uses MAX).
- *
- * Note: For high-concurrency environments, wrap the create operation
- * in a transaction with a serializable isolation level or use a
- * database sequence to avoid race conditions.
+ * This avoids race conditions from counting rows.
  */
 export async function generateOrganizationId(): Promise<string> {
   const PREFIX = "ORG";
   const PAD_LENGTH = 5;
 
-  const lastOrg = await prisma.organization.findFirst({
-    orderBy: { id: "desc" },
-    select: { id: true },
+  // Ensure the sequence row exists (idempotent)
+  await prisma.organizationSequence.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { id: 1, lastValue: 0 },
   });
 
-  let nextNumber = 1;
+  // Atomic increment + return
+  const result = await prisma.$queryRaw<{ lastValue: number }[]>`
+    UPDATE "OrganizationSequence"
+    SET "lastValue" = "lastValue" + 1
+    WHERE id = 1
+    RETURNING "lastValue"
+  `;
 
-  if (lastOrg) {
-    const numericPart = lastOrg.id.replace(`${PREFIX}-`, "");
-    const parsed = parseInt(numericPart, 10);
-    if (!isNaN(parsed)) {
-      nextNumber = parsed + 1;
-    }
-  }
-
+  const nextNumber = result[0].lastValue;
   const paddedNumber = String(nextNumber).padStart(PAD_LENGTH, "0");
   return `${PREFIX}-${paddedNumber}`;
 }

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { SidebarNav } from "./SidebarNav";
 import LogoutButton from "./LogoutButton";
+import { ThemeToggle } from "./ThemeToggle";
 import type { NavGroup } from "@/lib/config/theme";
 
 interface MobileSidebarProps {
@@ -75,6 +76,9 @@ export function MobileSidebar({
               <SidebarNav groups={footerGroups} />
             </div>
             <LogoutButton />
+            <div className="px-1 pt-2">
+              <ThemeToggle />
+            </div>
           </div>
         </SheetContent>
       </Sheet>

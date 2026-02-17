@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // ─── Shared Constants ────────────────────────────────────────────────────────
 
-const ADDRESS_TYPE = ["HEAD_OFFICE", "BILLING", "BRANCH"] as const;
+const ADDRESS_TYPE = ["HEAD_OFFICE", "BILLING", "CAMPUS", "OTHER"] as const;
 
 /** Pakistan provinces/territories — used for validation when country is PK */
 const PAKISTAN_PROVINCES = [
@@ -31,17 +31,17 @@ export const createOrganizationAddressSchema = z
       .max(11)
       .regex(/^ORG-\d{5}$/, "Organization ID must be in format ORG-00001"),
 
-    addressType: z.enum(ADDRESS_TYPE, {
-      message: "Address type must be one of: HEAD_OFFICE, BILLING, BRANCH",
+    type: z.enum(ADDRESS_TYPE, {
+      message: "Address type must be one of: HEAD_OFFICE, BILLING, CAMPUS, OTHER",
     }),
 
     country: z
       .string()
-      .length(2, "Country must be a 2-letter ISO-3166-1 alpha-2 code")
-      .regex(/^[A-Z]{2}$/, "Country code must be uppercase (e.g., PK, US, AE)")
-      .default("PK"),
+      .min(2, "Country is required")
+      .max(100, "Country must not exceed 100 characters")
+      .transform(normalizeString),
 
-    provinceState: z
+    province: z
       .string()
       .min(2, "Province/State must be at least 2 characters")
       .max(100, "Province/State must not exceed 100 characters")
@@ -53,10 +53,10 @@ export const createOrganizationAddressSchema = z
       .max(100, "City must not exceed 100 characters")
       .transform(normalizeString),
 
-    areaLocality: z
+    area: z
       .string()
-      .min(2, "Area/Locality must be at least 2 characters")
-      .max(120, "Area/Locality must not exceed 120 characters")
+      .min(2, "Area must be at least 2 characters")
+      .max(120, "Area must not exceed 120 characters")
       .transform(normalizeString)
       .optional()
       .or(z.literal("")),
@@ -83,37 +83,23 @@ export const createOrganizationAddressSchema = z
       .optional()
       .or(z.literal("")),
 
-    latitude: z
-      .number()
-      .min(-90, "Latitude must be between -90 and +90")
-      .max(90, "Latitude must be between -90 and +90")
-      .optional(),
-
-    longitude: z
-      .number()
-      .min(-180, "Longitude must be between -180 and +180")
-      .max(180, "Longitude must be between -180 and +180")
-      .optional(),
-
     isPrimary: z.boolean({
       message: "isPrimary is required and must be true or false",
     }),
   })
-  // Cross-field: if country is PK, provinceState must be from the predefined list
   .refine(
     (data) => {
-      if (data.country !== "PK") return true;
-      return PAKISTAN_PROVINCES.includes(data.provinceState as typeof PAKISTAN_PROVINCES[number]);
+      if (data.country !== "Pakistan") return true;
+      return PAKISTAN_PROVINCES.includes(data.province as typeof PAKISTAN_PROVINCES[number]);
     },
     {
-      message: `For Pakistan (PK), province must be one of: ${PAKISTAN_PROVINCES.join(", ")}`,
-      path: ["provinceState"],
+      message: `For Pakistan, province must be one of: ${PAKISTAN_PROVINCES.join(", ")}`,
+      path: ["province"],
     }
   )
-  // Normalize empty optional strings to undefined
   .transform((data) => ({
     ...data,
-    areaLocality: data.areaLocality || undefined,
+    area: data.area || undefined,
     postalCode: data.postalCode || undefined,
     addressLine2: data.addressLine2 || undefined,
   }));
@@ -122,17 +108,18 @@ export const createOrganizationAddressSchema = z
 
 export const updateOrganizationAddressSchema = z
   .object({
-    addressType: z.enum(ADDRESS_TYPE, {
-      message: "Address type must be one of: HEAD_OFFICE, BILLING, BRANCH",
+    type: z.enum(ADDRESS_TYPE, {
+      message: "Address type must be one of: HEAD_OFFICE, BILLING, CAMPUS, OTHER",
     }).optional(),
 
     country: z
       .string()
-      .length(2, "Country must be a 2-letter ISO-3166-1 alpha-2 code")
-      .regex(/^[A-Z]{2}$/, "Country code must be uppercase (e.g., PK, US, AE)")
+      .min(2, "Country is required")
+      .max(100, "Country must not exceed 100 characters")
+      .transform(normalizeString)
       .optional(),
 
-    provinceState: z
+    province: z
       .string()
       .min(2, "Province/State must be at least 2 characters")
       .max(100, "Province/State must not exceed 100 characters")
@@ -146,10 +133,10 @@ export const updateOrganizationAddressSchema = z
       .transform(normalizeString)
       .optional(),
 
-    areaLocality: z
+    area: z
       .string()
-      .min(2, "Area/Locality must be at least 2 characters")
-      .max(120, "Area/Locality must not exceed 120 characters")
+      .min(2, "Area must be at least 2 characters")
+      .max(120, "Area must not exceed 120 characters")
       .transform(normalizeString)
       .optional()
       .or(z.literal("")),
@@ -177,35 +164,22 @@ export const updateOrganizationAddressSchema = z
       .optional()
       .or(z.literal("")),
 
-    latitude: z
-      .number()
-      .min(-90, "Latitude must be between -90 and +90")
-      .max(90, "Latitude must be between -90 and +90")
-      .optional(),
-
-    longitude: z
-      .number()
-      .min(-180, "Longitude must be between -180 and +180")
-      .max(180, "Longitude must be between -180 and +180")
-      .optional(),
-
     isPrimary: z.boolean().optional(),
   })
-  // Cross-field: if country is PK and provinceState provided, validate against list
   .refine(
     (data) => {
-      if (!data.country || data.country !== "PK") return true;
-      if (!data.provinceState) return true;
-      return PAKISTAN_PROVINCES.includes(data.provinceState as typeof PAKISTAN_PROVINCES[number]);
+      if (!data.country || data.country !== "Pakistan") return true;
+      if (!data.province) return true;
+      return PAKISTAN_PROVINCES.includes(data.province as typeof PAKISTAN_PROVINCES[number]);
     },
     {
-      message: `For Pakistan (PK), province must be one of: ${PAKISTAN_PROVINCES.join(", ")}`,
-      path: ["provinceState"],
+      message: `For Pakistan, province must be one of: ${PAKISTAN_PROVINCES.join(", ")}`,
+      path: ["province"],
     }
   )
   .transform((data) => ({
     ...data,
-    areaLocality: data.areaLocality || undefined,
+    area: data.area || undefined,
     postalCode: data.postalCode || undefined,
     addressLine2: data.addressLine2 || undefined,
   }));

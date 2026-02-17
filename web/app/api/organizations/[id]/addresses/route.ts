@@ -65,12 +65,11 @@ export async function POST(request: Request, ctx: RouteContext) {
       );
     }
 
-    // Business rule: only one primary address per addressType per org
     if (parsed.data.isPrimary) {
       await prisma.organizationAddress.updateMany({
         where: {
           organizationId: orgId,
-          addressType: parsed.data.addressType,
+          type: parsed.data.type,
           isPrimary: true,
         },
         data: { isPrimary: false },
@@ -142,13 +141,12 @@ export async function PUT(request: Request, ctx: RouteContext) {
       );
     }
 
-    // Business rule: if setting isPrimary = true, unset others of same type
-    const effectiveType = parsed.data.addressType || existing.addressType;
+    const effectiveType = parsed.data.type || existing.type;
     if (parsed.data.isPrimary) {
       await prisma.organizationAddress.updateMany({
         where: {
           organizationId: orgId,
-          addressType: effectiveType,
+          type: effectiveType,
           isPrimary: true,
           id: { not: existing.id },
         },

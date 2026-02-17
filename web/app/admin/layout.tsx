@@ -4,6 +4,7 @@ import { navigation } from "@/lib/config/theme";
 import { SidebarNav } from "./SidebarNav";
 import LogoutButton from "./LogoutButton";
 import { MobileSidebar } from "./MobileSidebar";
+import { ThemeToggle } from "./ThemeToggle";
 
 const FOOTER_NAV_GROUPS = [
   {
@@ -32,10 +33,18 @@ export default async function AdminLayout({
   const user = session.user as {
     email?: string | null;
     role?: string;
+    platformRole?: string | null;
+    organizationId?: string | null;
   };
 
+  // Redirect to onboarding if user has no org and isn't a platform admin
+  if (!user.organizationId && !user.platformRole) {
+    redirect("/onboarding/organization");
+  }
+
   const userEmail = user.email || "";
-  const userRole = user.role?.replace("_", " ") || "Admin";
+  const displayRole = user.platformRole || user.role;
+  const userRole = displayRole?.replace("_", " ") || "Admin";
 
   return (
     <div className="flex h-screen flex-col md:flex-row">
@@ -81,6 +90,9 @@ export default async function AdminLayout({
           </div>
           <SidebarNav groups={FOOTER_NAV_GROUPS} />
           <LogoutButton />
+          <div className="px-1 pt-2">
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 

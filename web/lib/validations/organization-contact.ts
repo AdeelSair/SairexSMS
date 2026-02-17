@@ -17,7 +17,7 @@ function normalizeEmail(val: string): string {
 
 // ─── Base field schemas (reused in create & update) ──────────────────────────
 
-const contactNameField = z
+const nameField = z
   .string()
   .min(3, "Contact name must be at least 3 characters")
   .max(120, "Contact name must not exceed 120 characters")
@@ -51,87 +51,44 @@ export const createOrganizationContactSchema = z
       .max(11)
       .regex(/^ORG-\d{5}$/, "Organization ID must be in format ORG-00001"),
 
-    contactName: contactNameField,
+    name: nameField,
 
-    designation: designationField.optional(),
+    designation: designationField.optional().or(z.literal("")),
 
-    primaryPhone: phoneField,
+    phone: phoneField.optional().or(z.literal("")),
 
-    secondaryPhone: phoneField.optional().or(z.literal("")),
-
-    whatsappNumber: phoneField.optional().or(z.literal("")),
-
-    primaryEmail: emailField,
-
-    billingEmail: emailField.optional().or(z.literal("")),
-
-    supportEmail: emailField.optional().or(z.literal("")),
+    email: emailField.optional().or(z.literal("")),
 
     isPrimary: z.boolean({
       message: "isPrimary is required and must be true or false",
     }),
   })
-  // Cross-field: secondary phone must differ from primary
-  .refine(
-    (data) => {
-      if (!data.secondaryPhone || data.secondaryPhone === "") return true;
-      return data.secondaryPhone !== data.primaryPhone;
-    },
-    {
-      message: "Secondary phone must be different from primary phone",
-      path: ["secondaryPhone"],
-    }
-  )
-  // Normalize empty optional strings to undefined
   .transform((data) => ({
     ...data,
-    secondaryPhone: data.secondaryPhone || undefined,
-    whatsappNumber: data.whatsappNumber || undefined,
-    billingEmail: data.billingEmail || undefined,
-    supportEmail: data.supportEmail || undefined,
     designation: data.designation || undefined,
+    phone: data.phone || undefined,
+    email: data.email || undefined,
   }));
 
 // ─── OrganizationContact: UPDATE Schema ──────────────────────────────────────
 
 export const updateOrganizationContactSchema = z
   .object({
-    contactName: contactNameField.optional(),
+    name: nameField.optional(),
 
     designation: designationField.optional().or(z.literal("")),
 
-    primaryPhone: phoneField.optional(),
+    phone: phoneField.optional().or(z.literal("")),
 
-    secondaryPhone: phoneField.optional().or(z.literal("")),
-
-    whatsappNumber: phoneField.optional().or(z.literal("")),
-
-    primaryEmail: emailField.optional(),
-
-    billingEmail: emailField.optional().or(z.literal("")),
-
-    supportEmail: emailField.optional().or(z.literal("")),
+    email: emailField.optional().or(z.literal("")),
 
     isPrimary: z.boolean().optional(),
   })
-  .refine(
-    (data) => {
-      if (!data.secondaryPhone || data.secondaryPhone === "") return true;
-      if (!data.primaryPhone) return true; // can't compare if primary not provided
-      return data.secondaryPhone !== data.primaryPhone;
-    },
-    {
-      message: "Secondary phone must be different from primary phone",
-      path: ["secondaryPhone"],
-    }
-  )
   .transform((data) => ({
     ...data,
-    secondaryPhone: data.secondaryPhone || undefined,
-    whatsappNumber: data.whatsappNumber || undefined,
-    billingEmail: data.billingEmail || undefined,
-    supportEmail: data.supportEmail || undefined,
     designation: data.designation || undefined,
+    phone: data.phone || undefined,
+    email: data.email || undefined,
   }));
 
 // ─── Type Exports ────────────────────────────────────────────────────────────

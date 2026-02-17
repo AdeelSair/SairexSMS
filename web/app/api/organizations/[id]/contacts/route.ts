@@ -53,7 +53,6 @@ export async function POST(request: Request, ctx: RouteContext) {
   try {
     const body = await request.json();
 
-    // Inject the org ID from the URL path (source of truth)
     const parsed = createOrganizationContactSchema.safeParse({
       ...body,
       organizationId: orgId,
@@ -66,7 +65,6 @@ export async function POST(request: Request, ctx: RouteContext) {
       );
     }
 
-    // Business rule: only one isPrimary = true per org
     if (parsed.data.isPrimary) {
       await prisma.organizationContact.updateMany({
         where: { organizationId: orgId, isPrimary: true },
@@ -113,7 +111,6 @@ export async function PUT(request: Request, ctx: RouteContext) {
       );
     }
 
-    // Verify the contact belongs to this org
     const existing = await prisma.organizationContact.findUnique({
       where: { id: parseInt(contactId) },
     });
@@ -140,7 +137,6 @@ export async function PUT(request: Request, ctx: RouteContext) {
       );
     }
 
-    // Business rule: if setting isPrimary = true, unset others
     if (parsed.data.isPrimary) {
       await prisma.organizationContact.updateMany({
         where: { organizationId: orgId, isPrimary: true, id: { not: existing.id } },

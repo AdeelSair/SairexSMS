@@ -9,7 +9,7 @@
 /* ── Brand ─────────────────────────────────────────────────── */
 export const brand = {
   name: "SAIREX SMS",
-  tagline: "School Management System",
+  tagline: "Smart Management System",
   company: "Sairex Technologies",
 } as const;
 

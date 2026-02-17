@@ -13,9 +13,9 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isOnAdmin = nextUrl.pathname.startsWith("/admin");
+      const isOnOnboarding = nextUrl.pathname.startsWith("/onboarding");
 
-      if (isOnAdmin) {
-        // Must be logged in to access admin routes
+      if (isOnAdmin || isOnOnboarding) {
         return isLoggedIn;
       }
 
@@ -23,20 +23,27 @@ export const authConfig = {
     },
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as any).role;
-        token.organizationId = (user as any).organizationId;
-        token.campusId = (user as any).campusId ?? null;
+        token.id = (user as Record<string, unknown>).id;
+        token.platformRole = (user as Record<string, unknown>).platformRole ?? null;
+        token.role = (user as Record<string, unknown>).role ?? null;
+        token.organizationId = (user as Record<string, unknown>).organizationId ?? null;
+        token.campusId = (user as Record<string, unknown>).campusId ?? null;
+        token.membershipId = (user as Record<string, unknown>).membershipId ?? null;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).role = token.role;
-        (session.user as any).organizationId = token.organizationId;
-        (session.user as any).campusId = token.campusId ?? null;
+        const u = session.user as Record<string, unknown>;
+        u.id = token.id;
+        u.platformRole = token.platformRole ?? null;
+        u.role = token.role ?? null;
+        u.organizationId = token.organizationId ?? null;
+        u.campusId = token.campusId ?? null;
+        u.membershipId = token.membershipId ?? null;
       }
       return session;
     },
   },
-  providers: [], // Providers are added in auth.ts (not edge-safe)
+  providers: [],
 } satisfies NextAuthConfig;

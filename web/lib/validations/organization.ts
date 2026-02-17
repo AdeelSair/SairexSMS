@@ -11,8 +11,8 @@ const IANA_TIMEZONES = [
   "UTC",
 ] as const;
 
-const ORGANIZATION_TYPE = ["SCHOOL", "COLLEGE", "UNIVERSITY", "COMPANY", "NGO", "OTHER"] as const;
-const ORGANIZATION_STATUS = ["ACTIVE", "PENDING", "SUSPENDED"] as const;
+const ORGANIZATION_TYPE = ["SCHOOL", "COLLEGE", "UNIVERSITY", "ACADEMY", "NGO", "OTHER"] as const;
+const ORGANIZATION_STATUS = ["DRAFT", "PROFILE_PENDING", "ACTIVE", "SUSPENDED"] as const;
 
 // ─── Normalization Helpers ───────────────────────────────────────────────────
 
@@ -63,38 +63,8 @@ export const createOrganizationSchema = z
       .default(""),
 
     organizationType: z.enum(ORGANIZATION_TYPE, {
-      message: "Organization type must be one of: SCHOOL, COLLEGE, UNIVERSITY, COMPANY, NGO, OTHER",
+      message: "Organization type must be one of: SCHOOL, COLLEGE, UNIVERSITY, ACADEMY, NGO, OTHER",
     }),
-
-    registrationNumber: z
-      .string()
-      .min(5, "Registration number must be at least 5 characters")
-      .max(30, "Registration number must not exceed 30 characters")
-      .regex(/^[a-zA-Z0-9]+$/, "Registration number must be alphanumeric")
-      .optional()
-      .or(z.literal("")),
-
-    taxNumber: z
-      .string()
-      .min(7, "Tax number must be at least 7 characters")
-      .max(15, "Tax number must not exceed 15 characters")
-      .regex(/^[a-zA-Z0-9\-]+$/, "Tax number must be alphanumeric (hyphens allowed)")
-      .optional()
-      .or(z.literal("")),
-
-    logoUrl: z
-      .string()
-      .url("Logo must be a valid URL")
-      .regex(/^https:\/\//, "Logo URL must use HTTPS")
-      .optional()
-      .or(z.literal("")),
-
-    websiteUrl: z
-      .string()
-      .url("Website must be a valid URL")
-      .regex(/^https?:\/\//, "Website URL must include protocol (http:// or https://)")
-      .optional()
-      .or(z.literal("")),
 
     timeZone: z
       .string()
@@ -111,18 +81,14 @@ export const createOrganizationSchema = z
       .default("en"),
 
     status: z.enum(ORGANIZATION_STATUS, {
-      message: "Status must be one of: ACTIVE, PENDING, SUSPENDED",
-    }).default("PENDING"),
+      message: "Status must be one of: DRAFT, PROFILE_PENDING, ACTIVE, SUSPENDED",
+    }).default("DRAFT"),
   })
   .transform((data) => {
     const autoSlug = data.slug || slugify(data.organizationName);
     return {
       ...data,
       slug: autoSlug.length >= 3 ? autoSlug : `org-${Date.now().toString(36)}`,
-      registrationNumber: data.registrationNumber || undefined,
-      taxNumber: data.taxNumber || undefined,
-      logoUrl: data.logoUrl || undefined,
-      websiteUrl: data.websiteUrl || undefined,
     };
   });
 
@@ -159,42 +125,8 @@ export const updateOrganizationSchema = z
       .optional(),
 
     organizationType: z.enum(ORGANIZATION_TYPE, {
-      message: "Organization type must be one of: SCHOOL, COLLEGE, UNIVERSITY, COMPANY, NGO, OTHER",
+      message: "Organization type must be one of: SCHOOL, COLLEGE, UNIVERSITY, ACADEMY, NGO, OTHER",
     }).optional(),
-
-    registrationNumber: z
-      .string()
-      .min(5, "Registration number must be at least 5 characters")
-      .max(30, "Registration number must not exceed 30 characters")
-      .regex(/^[a-zA-Z0-9]+$/, "Registration number must be alphanumeric")
-      .optional()
-      .or(z.literal(""))
-      .transform((val) => val || undefined),
-
-    taxNumber: z
-      .string()
-      .min(7, "Tax number must be at least 7 characters")
-      .max(15, "Tax number must not exceed 15 characters")
-      .regex(/^[a-zA-Z0-9\-]+$/, "Tax number must be alphanumeric (hyphens allowed)")
-      .optional()
-      .or(z.literal(""))
-      .transform((val) => val || undefined),
-
-    logoUrl: z
-      .string()
-      .url("Logo must be a valid URL")
-      .regex(/^https:\/\//, "Logo URL must use HTTPS")
-      .optional()
-      .or(z.literal(""))
-      .transform((val) => val || undefined),
-
-    websiteUrl: z
-      .string()
-      .url("Website must be a valid URL")
-      .regex(/^https?:\/\//, "Website URL must include protocol (http:// or https://)")
-      .optional()
-      .or(z.literal(""))
-      .transform((val) => val || undefined),
 
     timeZone: z
       .string()
@@ -211,7 +143,7 @@ export const updateOrganizationSchema = z
       .optional(),
 
     status: z.enum(ORGANIZATION_STATUS, {
-      message: "Status must be one of: ACTIVE, PENDING, SUSPENDED",
+      message: "Status must be one of: DRAFT, PROFILE_PENDING, ACTIVE, SUSPENDED",
     }).optional(),
   });
 

@@ -1,121 +1,157 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+import { Loader2, AlertTriangle, CheckCircle2, Mail } from "lucide-react";
+
+import { api } from "@/lib/api-client";
+import { signupSchema, type SignupInput } from "@/lib/validations/signup";
+
+import { SxButton, SxStatusBadge } from "@/components/sx";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+
+/* ══════════════════════════════════════════════════════════════
+   Types
+   ══════════════════════════════════════════════════════════════ */
+
+interface InviteInfo {
+  email: string;
+  role: string;
+  orgName: string;
+}
+
+interface SignupResponse {
+  message: string;
+  user?: { id: number; email: string };
+  organizationName?: string;
+  verified: boolean;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Signup Form
+   ══════════════════════════════════════════════════════════════ */
 
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite") || "";
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [orgName, setOrgName] = useState("");
-  const [orgCode, setOrgCode] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [inviteInfo, setInviteInfo] = useState<{
-    email: string;
-    role: string;
-    orgName: string;
-  } | null>(null);
-  const [inviteError, setInviteError] = useState("");
-
   const isInvited = !!inviteToken;
+
+  /* ── State ──────────────────────────────────────────────── */
+
+  const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null);
+  const [inviteError, setInviteError] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
+
+  /* ── Invite validation ──────────────────────────────────── */
 
   useEffect(() => {
     if (!inviteToken) return;
 
-    fetch(`/api/invites/validate?token=${inviteToken}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          setInviteError(data.error);
+    api.get<InviteInfo>(`/api/invites/validate?token=${inviteToken}`).then(
+      (result) => {
+        if (result.ok) {
+          setInviteInfo(result.data);
         } else {
-          setInviteInfo(data);
-          setEmail(data.email);
+          setInviteError(result.error);
         }
-      })
-      .catch(() => setInviteError("Failed to validate invite link"));
+      },
+    );
   }, [inviteToken]);
 
-  const handleOrgNameChange = (value: string) => {
-    setOrgName(value);
-    const code = value
-      .toUpperCase()
-      .replace(/[^A-Z0-9\s]/g, "")
-      .replace(/\s+/g, "-")
-      .slice(0, 20);
-    setOrgCode(code);
-  };
+  /* ── Form: Zod + React Hook Form ────────────────────────── */
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const form = useForm<SignupInput>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      inviteToken: inviteToken || undefined,
+    },
+  });
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
+  const {
+    handleSubmit,
+    formState: { isSubmitting },
+  } = form;
+
+  useEffect(() => {
+    if (inviteInfo?.email) {
+      form.setValue("email", inviteInfo.email);
     }
+  }, [inviteInfo, form]);
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
+  /* ── Submit ─────────────────────────────────────────────── */
 
-    setLoading(true);
+  const onSubmit = async (data: SignupInput) => {
+    const result = await api.post<SignupResponse>("/api/auth/signup", {
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      inviteToken: data.inviteToken,
+    });
 
-    try {
-      const res = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          inviteToken: inviteToken || undefined,
-          orgName: isInvited ? undefined : orgName,
-          orgCode: isInvited ? undefined : orgCode,
-        }),
-      });
+    if (result.ok) {
+      if (result.data.verified) {
+        // Invite flow: auto-verified → sign in immediately
+        toast.success("Account created successfully");
 
-      const data = await res.json();
+        const signInResult = await signIn("credentials", {
+          email: data.email,
+          password: data.password,
+          redirect: false,
+        });
 
-      if (!res.ok) {
-        setError(data.error || "Signup failed.");
-        setLoading(false);
-        return;
-      }
-
-      const signInResult = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (signInResult?.error) {
-        router.push("/login");
+        if (signInResult?.error) {
+          router.push("/login");
+        } else {
+          router.push("/admin/dashboard");
+          router.refresh();
+        }
       } else {
-        router.push("/admin/dashboard");
-        router.refresh();
+        // Self-register: show verification email sent screen
+        setEmailSent(true);
+        setRegisteredEmail(data.email);
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
-      setLoading(false);
+    } else if (result.fieldErrors) {
+      for (const [field, messages] of Object.entries(result.fieldErrors)) {
+        form.setError(field as keyof SignupInput, {
+          message: messages[0],
+        });
+      }
+      toast.error("Please fix the validation errors");
+    } else {
+      toast.error(result.error);
     }
   };
+
+  /* ── Invite error state ─────────────────────────────────── */
 
   if (isInvited && inviteError) {
     return (
-      <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center shadow-2xl backdrop-blur-xl">
+      <div className="rounded-lg border border-border bg-card/80 p-8 text-center shadow-2xl backdrop-blur-xl">
         <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-warning" />
-        <h2 className="mb-2 text-xl font-semibold text-white">
+        <h2 className="mb-2 text-xl font-semibold text-foreground">
           Invalid Invite
         </h2>
-        <p className="mb-6 text-sm text-slate-400">{inviteError}</p>
+        <p className="mb-6 text-sm text-muted-foreground">{inviteError}</p>
         <Link
           href="/login"
           className="text-sm font-medium text-primary hover:text-primary/80"
@@ -126,149 +162,166 @@ function SignupForm() {
     );
   }
 
+  /* ── Invite loading state ───────────────────────────────── */
+
   if (isInvited && !inviteInfo && !inviteError) {
     return (
-      <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center text-slate-400 shadow-2xl backdrop-blur-xl">
+      <div className="rounded-lg border border-border bg-card/80 p-8 text-center text-muted-foreground shadow-2xl backdrop-blur-xl">
         <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
         Validating invite...
       </div>
     );
   }
 
+  /* ── Email sent success state ────────────────────────────── */
+
+  if (emailSent) {
+    return (
+      <div className="rounded-lg border border-border bg-card/80 p-8 text-center shadow-2xl backdrop-blur-xl">
+        <Mail className="mx-auto mb-4 h-10 w-10 text-primary" />
+        <h2 className="mb-2 text-xl font-semibold text-foreground">
+          Check your email
+        </h2>
+        <p className="mb-2 text-sm text-muted-foreground">
+          We sent a verification link to
+        </p>
+        <p className="mb-6 font-medium text-foreground">{registeredEmail}</p>
+        <p className="mb-6 text-xs text-muted-foreground">
+          Click the link in the email to verify your address and continue setting up your organization.
+          The link expires in 24 hours.
+        </p>
+        <Link
+          href="/login"
+          className="text-sm font-medium text-primary hover:text-primary/80"
+        >
+          Go to login
+        </Link>
+      </div>
+    );
+  }
+
+  /* ── Render ─────────────────────────────────────────────── */
+
   return (
-    <div className="rounded-lg border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
-      <h2 className="mb-1 text-xl font-semibold text-white">
-        {isInvited ? "Join your organization" : "Create your organization"}
+    <div className="rounded-lg border border-border bg-card/80 p-8 shadow-2xl backdrop-blur-xl">
+      <h2 className="mb-1 text-xl font-semibold text-foreground">
+        {isInvited ? "Join your organization" : "Create your Account"}
       </h2>
-      <p className="mb-6 text-sm text-slate-400">
+      <p className="mb-6 text-sm text-muted-foreground">
         {isInvited ? (
           <>
             You&apos;ve been invited to join{" "}
-            <strong className="text-slate-300">{inviteInfo?.orgName}</strong> as{" "}
-            <strong className="text-slate-300">
+            <strong className="text-foreground">{inviteInfo?.orgName}</strong> as{" "}
+            <SxStatusBadge variant="info" className="align-middle">
               {inviteInfo?.role?.replace("_", " ")}
-            </strong>
+            </SxStatusBadge>
           </>
         ) : (
-          "Get started with SAIREX SMS"
+          "Register to get started with SAIREX SMS"
         )}
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-300">
-            {error}
-          </div>
-        )}
-
-        {!isInvited && (
-          <>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">
-                Organization Name
-              </label>
-              <input
-                type="text"
-                value={orgName}
-                onChange={(e) => handleOrgNameChange(e.target.value)}
-                placeholder="e.g. Bright Future Schools"
-                required
-                autoFocus
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">
-                Organization Code
-              </label>
-              <input
-                type="text"
-                value={orgCode}
-                onChange={(e) => setOrgCode(e.target.value.toUpperCase())}
-                placeholder="AUTO-GENERATED"
-                required
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 font-mono text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Unique identifier — auto-generated from name
-              </p>
-            </div>
-          </>
-        )}
-
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-300">
-            Email address
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            readOnly={isInvited}
-            className={`w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-              isInvited ? "cursor-not-allowed opacity-60" : ""
-            }`}
+      <Form {...form}>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Name */}
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Full Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="Your full name" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {isInvited && (
-            <p className="mt-1 text-xs text-slate-500">
-              Set by your admin — cannot be changed
-            </p>
-          )}
-        </div>
 
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-300">
-            Password
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimum 8 characters"
-            required
-            minLength={8}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+          {/* Email */}
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email address</FormLabel>
+                <FormControl>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    readOnly={isInvited}
+                    disabled={isInvited}
+                    {...field}
+                  />
+                </FormControl>
+                {isInvited && (
+                  <p className="text-xs text-muted-foreground">
+                    Set by your admin — cannot be changed
+                  </p>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
 
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-300">
-            Confirm Password
-          </label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Repeat your password"
-            required
-            minLength={8}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+          {/* Password */}
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <Input
+                    type="password"
+                    placeholder="Minimum 8 characters"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Creating account...
-            </span>
-          ) : isInvited ? (
-            "Join organization"
-          ) : (
-            "Create organization"
-          )}
-        </button>
-      </form>
+          {/* Confirm Password */}
+          <FormField
+            control={form.control}
+            name="confirmPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirm Password</FormLabel>
+                <FormControl>
+                  <Input
+                    type="password"
+                    placeholder="Repeat your password"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Submit */}
+          <SxButton
+            type="submit"
+            sxVariant="primary"
+            loading={isSubmitting}
+            className="w-full py-3"
+          >
+            {isInvited ? "Join organization" : "Create account"}
+          </SxButton>
+        </form>
+      </Form>
+
+      {!isInvited && (
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          You&apos;ll receive a verification email to confirm your address
+        </p>
+      )}
 
       <div className="mt-5 text-center">
-        <span className="text-sm text-slate-500">
+        <span className="text-sm text-muted-foreground">
           Already have an account?{" "}
         </span>
         <Link
@@ -282,11 +335,15 @@ function SignupForm() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Page Export
+   ══════════════════════════════════════════════════════════════ */
+
 export default function SignupPage() {
   return (
     <Suspense
       fallback={
-        <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center text-slate-400 shadow-2xl backdrop-blur-xl">
+        <div className="rounded-lg border border-border bg-card/80 p-8 text-center text-muted-foreground shadow-2xl backdrop-blur-xl">
           <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
           Loading...
         </div>
