@@ -2,26 +2,18 @@ import { z } from "zod";
 
 // ─── Shared Constants ────────────────────────────────────────────────────────
 
-const IANA_TIMEZONES = [
-  "Asia/Karachi", "Asia/Kolkata", "Asia/Dubai", "Asia/Riyadh",
-  "Asia/Shanghai", "Asia/Tokyo", "Asia/Singapore",
-  "Europe/London", "Europe/Paris", "Europe/Berlin",
-  "America/New_York", "America/Chicago", "America/Los_Angeles",
-  "America/Toronto", "Australia/Sydney", "Pacific/Auckland",
-  "UTC",
+const ORGANIZATION_TYPE = [
+  "SINGLE_SCHOOL", "SCHOOL_SYSTEM", "COLLEGE", "ACADEMY", "UNIVERSITY", "INSTITUTE",
 ] as const;
 
-const ORGANIZATION_TYPE = ["SCHOOL", "COLLEGE", "UNIVERSITY", "ACADEMY", "NGO", "OTHER"] as const;
-const ORGANIZATION_STATUS = ["DRAFT", "PROFILE_PENDING", "ACTIVE", "SUSPENDED"] as const;
+const ORGANIZATION_STATUS = ["ACTIVE", "SUSPENDED", "ARCHIVED"] as const;
 
 // ─── Normalization Helpers ───────────────────────────────────────────────────
 
-/** Trim, collapse double spaces */
 function normalizeString(val: string): string {
   return val.trim().replace(/\s{2,}/g, " ");
 }
 
-/** Generate slug from a name: lowercase, replace spaces/special chars with hyphens */
 function slugify(name: string): string {
   return name
     .toLowerCase()
@@ -39,8 +31,8 @@ export const createOrganizationSchema = z
       .min(3, "Organization name must be at least 3 characters")
       .max(150, "Organization name must not exceed 150 characters")
       .regex(
-        /^[a-zA-Z0-9\s.&\-]+$/,
-        "Organization name may only contain letters, numbers, spaces, periods, ampersands, and hyphens"
+        /^[a-zA-Z0-9\s.&()\-]+$/,
+        "Organization name may only contain letters, numbers, spaces, periods, ampersands, parentheses, and hyphens"
       )
       .transform(normalizeString),
 
@@ -63,26 +55,12 @@ export const createOrganizationSchema = z
       .default(""),
 
     organizationType: z.enum(ORGANIZATION_TYPE, {
-      message: "Organization type must be one of: SCHOOL, COLLEGE, UNIVERSITY, ACADEMY, NGO, OTHER",
+      message: "Please select a valid organization type",
     }),
 
-    timeZone: z
-      .string()
-      .refine((val) => IANA_TIMEZONES.includes(val as typeof IANA_TIMEZONES[number]), {
-        message: "Must be a valid IANA timezone (e.g., Asia/Karachi)",
-      })
-      .default("Asia/Karachi"),
-
-    defaultLanguage: z
-      .string()
-      .min(2, "Language code must be at least 2 characters")
-      .max(5, "Language code must not exceed 5 characters")
-      .regex(/^[a-z]+$/, "Language code must be lowercase (e.g., en, ur)")
-      .default("en"),
-
     status: z.enum(ORGANIZATION_STATUS, {
-      message: "Status must be one of: DRAFT, PROFILE_PENDING, ACTIVE, SUSPENDED",
-    }).default("DRAFT"),
+      message: "Status must be one of: ACTIVE, SUSPENDED, ARCHIVED",
+    }).default("ACTIVE"),
   })
   .transform((data) => {
     const autoSlug = data.slug || slugify(data.organizationName);
@@ -101,8 +79,8 @@ export const updateOrganizationSchema = z
       .min(3, "Organization name must be at least 3 characters")
       .max(150, "Organization name must not exceed 150 characters")
       .regex(
-        /^[a-zA-Z0-9\s.&\-]+$/,
-        "Organization name may only contain letters, numbers, spaces, periods, ampersands, and hyphens"
+        /^[a-zA-Z0-9\s.&()\-]+$/,
+        "Organization name may only contain letters, numbers, spaces, periods, ampersands, parentheses, and hyphens"
       )
       .transform(normalizeString)
       .optional(),
@@ -125,25 +103,11 @@ export const updateOrganizationSchema = z
       .optional(),
 
     organizationType: z.enum(ORGANIZATION_TYPE, {
-      message: "Organization type must be one of: SCHOOL, COLLEGE, UNIVERSITY, ACADEMY, NGO, OTHER",
+      message: "Please select a valid organization type",
     }).optional(),
 
-    timeZone: z
-      .string()
-      .refine((val) => IANA_TIMEZONES.includes(val as typeof IANA_TIMEZONES[number]), {
-        message: "Must be a valid IANA timezone (e.g., Asia/Karachi)",
-      })
-      .optional(),
-
-    defaultLanguage: z
-      .string()
-      .min(2, "Language code must be at least 2 characters")
-      .max(5, "Language code must not exceed 5 characters")
-      .regex(/^[a-z]+$/, "Language code must be lowercase (e.g., en, ur)")
-      .optional(),
-
     status: z.enum(ORGANIZATION_STATUS, {
-      message: "Status must be one of: DRAFT, PROFILE_PENDING, ACTIVE, SUSPENDED",
+      message: "Status must be one of: ACTIVE, SUSPENDED, ARCHIVED",
     }).optional(),
   });
 
@@ -155,4 +119,4 @@ export type UpdateOrganizationInput = z.input<typeof updateOrganizationSchema>;
 export type UpdateOrganizationData = z.output<typeof updateOrganizationSchema>;
 
 // Re-export constants for use in UI dropdowns
-export { ORGANIZATION_TYPE, ORGANIZATION_STATUS, IANA_TIMEZONES };
+export { ORGANIZATION_TYPE, ORGANIZATION_STATUS };

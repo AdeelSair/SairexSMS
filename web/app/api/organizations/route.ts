@@ -4,7 +4,6 @@ import { requireAuth, requireRole, isSuperAdmin } from "@/lib/auth-guard";
 import { generateOrganizationId } from "@/lib/id-generators";
 import { createOrganizationSchema } from "@/lib/validations";
 
-// 1. GET: Fetch organizations (SUPER_ADMIN sees all, others see only their own)
 export async function GET() {
   const guard = await requireAuth();
   if (guard instanceof NextResponse) return guard;
@@ -22,12 +21,11 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch orgs" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-// 2. POST: Create a new Organization (SUPER_ADMIN only)
 export async function POST(request: Request) {
   const guard = await requireAuth();
   if (guard instanceof NextResponse) return guard;
@@ -42,7 +40,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json(
         { errors: parsed.error.flatten().fieldErrors },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -52,7 +50,7 @@ export async function POST(request: Request) {
     if (existingSlug) {
       return NextResponse.json(
         { errors: { slug: ["This slug is already taken"] } },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -62,7 +60,12 @@ export async function POST(request: Request) {
       data: {
         id: orgId,
         createdByUserId: guard.id,
-        ...parsed.data,
+        organizationName: parsed.data.organizationName,
+        displayName: parsed.data.displayName,
+        slug: parsed.data.slug,
+        organizationType: parsed.data.organizationType,
+        status: parsed.data.status,
+        onboardingStep: "COMPLETED",
       },
     });
 
@@ -71,7 +74,7 @@ export async function POST(request: Request) {
     console.error("Failed to create org:", error);
     return NextResponse.json(
       { error: "Failed to create organization" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

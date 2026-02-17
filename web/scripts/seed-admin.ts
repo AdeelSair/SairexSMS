@@ -1,6 +1,6 @@
 /**
- * Seed Script: Creates the root Organization, SUPER_ADMIN user + Membership,
- * primary contact, head office address, and organization ID sequence.
+ * Seed Script: Creates the root Organization (flat model), SUPER_ADMIN user,
+ * ORG_ADMIN membership, and organization ID sequence.
  *
  * Run with:  npx tsx scripts/seed-admin.ts
  */
@@ -26,7 +26,6 @@ async function main() {
   const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
   // 2. Upsert the SUPER_ADMIN user (global identity with platformRole)
-  //    Platform admins are pre-verified and active.
   const admin = await prisma.user.upsert({
     where: { email: "admin@sairex-sms.com" },
     update: { password: hashedPassword, platformRole: "SUPER_ADMIN" },
@@ -41,21 +40,37 @@ async function main() {
   });
   console.log(`Super Admin : ${admin.email} (id: ${admin.id}, platformRole: ${admin.platformRole})`);
 
-  // 3. Upsert the root organization
+  // 3. Upsert the root organization (flat single-table model)
   const org = await prisma.organization.upsert({
     where: { slug: "sairex-hq" },
     update: {},
     create: {
       id: "ORG-00001",
-      organizationName: "Sairex Headquarters",
-      displayName: "Sairex HQ",
       slug: "sairex-hq",
-      organizationType: "ACADEMY",
-      timeZone: "Asia/Karachi",
-      defaultLanguage: "en",
       status: "ACTIVE",
       onboardingStep: "COMPLETED",
       createdByUserId: admin.id,
+
+      // Core Identity
+      organizationName: "Sairex Headquarters",
+      displayName: "Sairex HQ",
+      organizationType: "ACADEMY",
+
+      // Legal
+      registrationNumber: "N/A",
+      taxNumber: "N/A",
+      establishedDate: new Date("2024-01-01"),
+
+      // HQ Address
+      addressLine1: "123 Main Boulevard, DHA Phase 5",
+      country: "Pakistan",
+      provinceState: "Punjab",
+      city: "Lahore",
+      postalCode: "54000",
+
+      // Contact
+      organizationEmail: "admin@sairex-sms.com",
+      organizationPhone: "042-1234567",
     },
   });
   console.log(`Organization: "${org.organizationName}" (id: ${org.id})`);
@@ -77,60 +92,6 @@ async function main() {
     },
   });
   console.log(`Membership  : ${membership.role} in ${org.displayName}`);
-
-  // 5. Seed a primary contact (skip if one already exists)
-  const existingContact = await prisma.organizationContact.findFirst({
-    where: { organizationId: org.id, isPrimary: true },
-  });
-
-  if (!existingContact) {
-    const contact = await prisma.organizationContact.create({
-      data: {
-        organizationId: org.id,
-        name: "Adeel Ahmed",
-        designation: "System Administrator",
-        phone: "+923001234567",
-        email: "admin@sairex-sms.com",
-        isPrimary: true,
-      },
-    });
-    console.log(`Contact     : ${contact.name} (primary)`);
-  } else {
-    console.log(
-      `Contact     : Primary contact already exists (id: ${existingContact.id})`,
-    );
-  }
-
-  // 6. Seed a head office address (skip if one already exists)
-  const existingAddress = await prisma.organizationAddress.findFirst({
-    where: {
-      organizationId: org.id,
-      type: "HEAD_OFFICE",
-      isPrimary: true,
-    },
-  });
-
-  if (!existingAddress) {
-    const address = await prisma.organizationAddress.create({
-      data: {
-        organizationId: org.id,
-        type: "HEAD_OFFICE",
-        country: "Pakistan",
-        province: "Punjab",
-        city: "Lahore",
-        addressLine1: "123 Main Boulevard, DHA Phase 5",
-        postalCode: "54000",
-        isPrimary: true,
-      },
-    });
-    console.log(
-      `Address     : ${address.city}, ${address.province} (HEAD_OFFICE)`,
-    );
-  } else {
-    console.log(
-      `Address     : Head office address already exists (id: ${existingAddress.id})`,
-    );
-  }
 
   console.log("\n========================================");
   console.log("  LOGIN CREDENTIALS");

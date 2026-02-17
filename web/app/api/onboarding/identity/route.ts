@@ -2,11 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireVerifiedAuth } from "@/lib/auth-guard";
 import { generateOrganizationId } from "@/lib/id-generators";
-import { onboardingOrganizationSchema } from "@/lib/validations/onboarding";
+import { onboardingIdentitySchema } from "@/lib/validations/onboarding";
 
-/**
- * Slugify a string for use as an organization slug.
- */
 function slugify(name: string): string {
   return name
     .toLowerCase()
@@ -16,17 +13,16 @@ function slugify(name: string): string {
 }
 
 /**
- * POST /api/onboarding/organization
+ * POST /api/onboarding/identity
  *
- * Creates the user's organization + ORG_ADMIN membership.
- * Only for users who have verified their email but have no org yet.
+ * Step 1: Creates the Organization with core identity fields
+ * and an ORG_ADMIN membership for the founder.
  */
 export async function POST(request: Request) {
   const guard = await requireVerifiedAuth();
   if (guard instanceof NextResponse) return guard;
 
   try {
-    // Check user doesn't already have an active membership
     const existingMembership = await prisma.membership.findFirst({
       where: { userId: guard.id, status: "ACTIVE" },
     });
@@ -39,7 +35,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const parsed = onboardingOrganizationSchema.safeParse(body);
+    const parsed = onboardingIdentitySchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -48,7 +44,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const slug = slugify(parsed.data.organizationName);
+    const slug = slugify(parsed.data.displayName);
     const finalSlug = slug.length >= 3 ? slug : `org-${Date.now().toString(36)}`;
 
     const existingSlug = await prisma.organization.findUnique({
@@ -68,14 +64,12 @@ export async function POST(request: Request) {
       const org = await tx.organization.create({
         data: {
           id: orgId,
+          slug: finalSlug,
           organizationName: parsed.data.organizationName,
           displayName: parsed.data.displayName,
-          slug: finalSlug,
           organizationType: parsed.data.organizationType,
-          timeZone: parsed.data.timeZone,
-          defaultLanguage: parsed.data.defaultLanguage,
-          status: "DRAFT",
-          onboardingStep: "ORG_CREATED",
+          status: "ACTIVE",
+          onboardingStep: "ORG_IDENTITY",
           createdByUserId: guard.id,
         },
       });
@@ -97,12 +91,12 @@ export async function POST(request: Request) {
         message: "Organization created",
         organizationId: result.id,
         organizationName: result.organizationName,
-        nextUrl: "/onboarding/contact",
+        nextUrl: "/onboarding/legal",
       },
       { status: 201 },
     );
   } catch (error) {
-    console.error("Onboarding org creation error:", error);
+    console.error("Onboarding identity error:", error);
     return NextResponse.json(
       { error: "Failed to create organization" },
       { status: 500 },

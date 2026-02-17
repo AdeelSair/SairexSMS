@@ -59,14 +59,14 @@ interface Organization {
   organizationType: string;
   status: string;
   onboardingStep: string;
-  timeZone: string;
-  defaultLanguage: string;
+  organizationEmail: string | null;
+  organizationPhone: string | null;
+  city: string | null;
   createdAt: string;
 }
 
 /* ══════════════════════════════════════════════════════════════
    Column Definitions
-   Design tokens only — no hardcoded colors.
    ══════════════════════════════════════════════════════════════ */
 
 const columns: SxColumn<Organization>[] = [
@@ -101,7 +101,7 @@ const columns: SxColumn<Organization>[] = [
     header: "Type",
     render: (row) => (
       <SxStatusBadge variant="info">
-        {row.organizationType}
+        {humanize(row.organizationType)}
       </SxStatusBadge>
     ),
   },
@@ -122,6 +122,15 @@ const columns: SxColumn<Organization>[] = [
     ),
   },
   {
+    key: "city",
+    header: "City",
+    render: (row) => (
+      <span className="text-sm text-muted-foreground">
+        {row.city || "—"}
+      </span>
+    ),
+  },
+  {
     key: "createdAt",
     header: "Created",
     render: (row) => (
@@ -136,11 +145,11 @@ const columns: SxColumn<Organization>[] = [
    Helpers
    ══════════════════════════════════════════════════════════════ */
 
-const KEEP_UPPER = new Set(["NGO"]);
-
 function humanize(value: string): string {
-  if (KEEP_UPPER.has(value)) return value;
-  return value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, " ");
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -178,10 +187,8 @@ export default function OrganizationsPage() {
       organizationName: "",
       displayName: "",
       slug: "",
-      organizationType: "SCHOOL",
-      timeZone: "Asia/Karachi",
-      defaultLanguage: "en",
-      status: "DRAFT",
+      organizationType: "SINGLE_SCHOOL",
+      status: "ACTIVE",
     },
   });
 
@@ -297,7 +304,7 @@ export default function OrganizationsPage() {
                       <FormLabel>Organization Name</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="e.g. Beaconhouse School System"
+                          placeholder="e.g. The City School (Pvt) Ltd"
                           {...field}
                         />
                       </FormControl>
@@ -314,7 +321,7 @@ export default function OrganizationsPage() {
                       <FormLabel>Display Name</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="e.g. Beaconhouse"
+                          placeholder="e.g. The City School"
                           {...field}
                         />
                       </FormControl>
@@ -394,34 +401,6 @@ export default function OrganizationsPage() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="timeZone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Timezone</FormLabel>
-                      <FormControl>
-                        <Input value={field.value} readOnly disabled />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="defaultLanguage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Default Language</FormLabel>
-                      <FormControl>
-                        <Input value="English" readOnly disabled />
-                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

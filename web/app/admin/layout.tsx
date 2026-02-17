@@ -39,7 +39,7 @@ export default async function AdminLayout({
 
   // Redirect to onboarding if user has no org and isn't a platform admin
   if (!user.organizationId && !user.platformRole) {
-    redirect("/onboarding/organization");
+    redirect("/onboarding/identity");
   }
 
   const userEmail = user.email || "";

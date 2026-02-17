@@ -7,9 +7,9 @@ import { toast } from "sonner";
 
 import { api } from "@/lib/api-client";
 import {
-  onboardingOrganizationSchema,
+  onboardingIdentitySchema,
   ONBOARDING_ORGANIZATION_TYPE,
-  type OnboardingOrganizationInput,
+  type OnboardingIdentityInput,
 } from "@/lib/validations/onboarding";
 
 import { SxButton } from "@/components/sx";
@@ -30,34 +30,28 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 
-/* ── Helpers ────────────────────────────────────────────────── */
-
-const KEEP_UPPER = new Set(["NGO"]);
-
 function humanize(value: string): string {
-  if (KEEP_UPPER.has(value)) return value;
-  return value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, " ");
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/* ── Page ───────────────────────────────────────────────────── */
-
-interface OrgResponse {
+interface IdentityResponse {
   message: string;
   organizationId: string;
   nextUrl: string;
 }
 
-export default function OnboardingOrganizationPage() {
+export default function OnboardingIdentityPage() {
   const router = useRouter();
 
-  const form = useForm<OnboardingOrganizationInput>({
-    resolver: zodResolver(onboardingOrganizationSchema),
+  const form = useForm<OnboardingIdentityInput>({
+    resolver: zodResolver(onboardingIdentitySchema),
     defaultValues: {
       organizationName: "",
       displayName: "",
-      organizationType: "SCHOOL",
-      timeZone: "Asia/Karachi",
-      defaultLanguage: "en",
+      organizationType: "SINGLE_SCHOOL",
     },
   });
 
@@ -66,8 +60,8 @@ export default function OnboardingOrganizationPage() {
     formState: { isSubmitting },
   } = form;
 
-  const onSubmit = async (data: OnboardingOrganizationInput) => {
-    const result = await api.post<OrgResponse>("/api/onboarding/organization", data);
+  const onSubmit = async (data: OnboardingIdentityInput) => {
+    const result = await api.post<IdentityResponse>("/api/onboarding/identity", data);
 
     if (result.ok) {
       toast.success(`Organization created — ${result.data.organizationId}`);
@@ -75,7 +69,7 @@ export default function OnboardingOrganizationPage() {
       router.refresh();
     } else if (result.fieldErrors) {
       for (const [field, messages] of Object.entries(result.fieldErrors)) {
-        form.setError(field as keyof OnboardingOrganizationInput, {
+        form.setError(field as keyof OnboardingIdentityInput, {
           message: messages[0],
         });
       }
@@ -88,10 +82,10 @@ export default function OnboardingOrganizationPage() {
   return (
     <div className="rounded-lg border border-border bg-card p-8 shadow-lg">
       <h2 className="mb-1 text-xl font-semibold text-foreground">
-        Create your Organization
+        Organization Identity
       </h2>
       <p className="mb-6 text-sm text-muted-foreground">
-        Provide your organization details to get started.
+        Provide your organization&apos;s basic information to get started.
       </p>
 
       <Form {...form}>
@@ -101,9 +95,9 @@ export default function OnboardingOrganizationPage() {
             name="organizationName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Organization Name</FormLabel>
+                <FormLabel>Organization Name (Legal)</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Beaconhouse School System" {...field} />
+                  <Input placeholder="e.g. The City School (Pvt) Ltd" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -117,7 +111,7 @@ export default function OnboardingOrganizationPage() {
               <FormItem>
                 <FormLabel>Display Name</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Beaconhouse" {...field} />
+                  <Input placeholder="e.g. The City School" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -155,7 +149,7 @@ export default function OnboardingOrganizationPage() {
             loading={isSubmitting}
             className="w-full py-3"
           >
-            Create Organization
+            Save & Continue
           </SxButton>
         </form>
       </Form>

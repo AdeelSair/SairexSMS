@@ -7,8 +7,8 @@ import { toast } from "sonner";
 
 import { api } from "@/lib/api-client";
 import {
-  onboardingContactSchema,
-  type OnboardingContactInput,
+  onboardingLegalSchema,
+  type OnboardingLegalInput,
 } from "@/lib/validations/onboarding";
 
 import { SxButton } from "@/components/sx";
@@ -22,21 +22,20 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
-interface ContactResponse {
+interface LegalResponse {
   message: string;
   nextUrl: string;
 }
 
-export default function OnboardingContactPage() {
+export default function OnboardingLegalPage() {
   const router = useRouter();
 
-  const form = useForm<OnboardingContactInput>({
-    resolver: zodResolver(onboardingContactSchema),
+  const form = useForm<OnboardingLegalInput>({
+    resolver: zodResolver(onboardingLegalSchema),
     defaultValues: {
-      name: "",
-      designation: "",
-      phone: "",
-      email: "",
+      registrationNumber: "",
+      taxNumber: "",
+      establishedDate: "",
     },
   });
 
@@ -45,16 +44,16 @@ export default function OnboardingContactPage() {
     formState: { isSubmitting },
   } = form;
 
-  const onSubmit = async (data: OnboardingContactInput) => {
-    const result = await api.post<ContactResponse>("/api/onboarding/contact", data);
+  const onSubmit = async (data: OnboardingLegalInput) => {
+    const result = await api.post<LegalResponse>("/api/onboarding/legal", data);
 
     if (result.ok) {
-      toast.success("Primary contact added");
+      toast.success("Legal information saved");
       router.push(result.data.nextUrl);
       router.refresh();
     } else if (result.fieldErrors) {
       for (const [field, messages] of Object.entries(result.fieldErrors)) {
-        form.setError(field as keyof OnboardingContactInput, {
+        form.setError(field as keyof OnboardingLegalInput, {
           message: messages[0],
         });
       }
@@ -67,22 +66,22 @@ export default function OnboardingContactPage() {
   return (
     <div className="rounded-lg border border-border bg-card p-8 shadow-lg">
       <h2 className="mb-1 text-xl font-semibold text-foreground">
-        Primary Contact
+        Legal Information
       </h2>
       <p className="mb-6 text-sm text-muted-foreground">
-        Add the main contact person for your organization.
+        Provide your organization&apos;s legal details. Enter &quot;N/A&quot; if not applicable.
       </p>
 
       <Form {...form}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <FormField
             control={form.control}
-            name="name"
+            name="registrationNumber"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Contact Name</FormLabel>
+                <FormLabel>Registration Number</FormLabel>
                 <FormControl>
-                  <Input placeholder="Full name" {...field} />
+                  <Input placeholder="e.g. REG-12345 or N/A" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -91,12 +90,12 @@ export default function OnboardingContactPage() {
 
           <FormField
             control={form.control}
-            name="designation"
+            name="taxNumber"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Designation</FormLabel>
+                <FormLabel>Tax / NTN Number</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Principal, Director" {...field} />
+                  <Input placeholder="e.g. 1234567-8 or N/A" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -105,26 +104,12 @@ export default function OnboardingContactPage() {
 
           <FormField
             control={form.control}
-            name="phone"
+            name="establishedDate"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Phone Number</FormLabel>
+                <FormLabel>Established Date</FormLabel>
                 <FormControl>
-                  <Input placeholder="+923001234567" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
-                <FormControl>
-                  <Input type="email" placeholder="contact@organization.com" {...field} />
+                  <Input type="date" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

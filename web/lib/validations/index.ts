@@ -6,7 +6,6 @@ export {
   updateOrganizationSchema,
   ORGANIZATION_TYPE,
   ORGANIZATION_STATUS,
-  IANA_TIMEZONES,
   type CreateOrganizationInput,
   type CreateOrganizationData,
   type UpdateOrganizationInput,
@@ -42,16 +41,19 @@ export {
   type SignupData,
 } from "./signup";
 
-// Onboarding
+// Onboarding (4-step wizard)
 export {
-  onboardingOrganizationSchema,
-  onboardingContactSchema,
-  onboardingAddressSchema,
+  onboardingIdentitySchema,
+  onboardingLegalSchema,
+  onboardingContactAddressSchema,
+  onboardingBrandingSchema,
   ONBOARDING_ORGANIZATION_TYPE,
-  type OnboardingOrganizationInput,
-  type OnboardingOrganizationData,
-  type OnboardingContactInput,
-  type OnboardingContactData,
-  type OnboardingAddressInput,
-  type OnboardingAddressData,
+  type OnboardingIdentityInput,
+  type OnboardingIdentityData,
+  type OnboardingLegalInput,
+  type OnboardingLegalData,
+  type OnboardingContactAddressInput,
+  type OnboardingContactAddressData,
+  type OnboardingBrandingInput,
+  type OnboardingBrandingData,
 } from "./onboarding";

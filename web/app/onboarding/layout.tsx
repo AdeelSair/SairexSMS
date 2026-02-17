@@ -12,10 +12,10 @@ interface OnboardingStatus {
 }
 
 const STEPS = [
-  { key: "EMAIL_VERIFIED", label: "Organization", path: "/onboarding/organization" },
-  { key: "ORG_CREATED_CONTACT", label: "Contact", path: "/onboarding/contact" },
-  { key: "ORG_CREATED_ADDRESS", label: "Address", path: "/onboarding/address" },
-  { key: "PROFILE_COMPLETED", label: "Complete", path: "/onboarding/complete" },
+  { key: "identity", label: "Identity", path: "/onboarding/identity" },
+  { key: "legal", label: "Legal", path: "/onboarding/legal" },
+  { key: "contact-address", label: "Contact & Address", path: "/onboarding/contact-address" },
+  { key: "branding", label: "Branding", path: "/onboarding/branding" },
 ];
 
 function getStepIndex(nextUrl: string): number {
@@ -42,7 +42,6 @@ export default function OnboardingLayout({
       }
       setStatus(result.data);
 
-      // Redirect to correct step if user navigates manually
       if (pathname !== result.data.nextUrl) {
         router.replace(result.data.nextUrl);
       }

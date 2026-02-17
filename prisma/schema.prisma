@@ -39,26 +39,25 @@ enum MembershipStatus {
 }
 
 enum OrganizationType {
-  SCHOOL
+  SINGLE_SCHOOL
+  SCHOOL_SYSTEM
   COLLEGE
-  UNIVERSITY
   ACADEMY
-  NGO
-  OTHER
+  UNIVERSITY
+  INSTITUTE
 }
 
 enum OrganizationStatus {
-  DRAFT
-  PROFILE_PENDING
   ACTIVE
   SUSPENDED
+  ARCHIVED
 }
 
 enum OnboardingStep {
-  ACCOUNT_CREATED
-  EMAIL_VERIFIED
-  ORG_CREATED
-  PROFILE_COMPLETED
+  ORG_IDENTITY
+  LEGAL
+  CONTACT_ADDRESS
+  BRANDING
   COMPLETED
 }
 
@@ -107,34 +106,53 @@ model OrganizationSequence {
 }
 
 ////////////////////////////////////////////////////////////
-/// ORGANIZATION (TENANT ROOT)
+/// ORGANIZATION (TENANT ROOT — Flat Single Table)
 ////////////////////////////////////////////////////////////
 
 model Organization {
-  id                String             @id @db.VarChar(11)
-  organizationName  String
-  displayName       String
-  slug              String             @unique
+  /// System
+  id               String              @id @db.VarChar(11)
+  slug             String              @unique
+  status           OrganizationStatus  @default(ACTIVE)
+  onboardingStep   OnboardingStep      @default(ORG_IDENTITY)
 
-  organizationType  OrganizationType
-  status            OrganizationStatus @default(DRAFT)
+  createdByUserId  Int
+  createdBy        User                @relation("OrgCreator", fields: [createdByUserId], references: [id])
 
-  onboardingStep    OnboardingStep     @default(ACCOUNT_CREATED)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
-  timeZone          String             @default("Asia/Karachi")
-  defaultLanguage   String             @default("en")
+  /// Core Identity (Step 1: ORG_IDENTITY)
+  organizationName String
+  displayName      String
+  organizationType OrganizationType
 
-  createdByUserId   Int
-  createdBy         User               @relation("OrgCreator", fields: [createdByUserId], references: [id])
+  /// Legal (Step 2: LEGAL — nullable until filled)
+  registrationNumber String?
+  taxNumber          String?
+  establishedDate    DateTime?          @db.Date
 
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  /// HQ Address (Step 3: CONTACT_ADDRESS — nullable until filled)
+  addressLine1     String?
+  addressLine2     String?
+  country          String?
+  provinceState    String?
+  city             String?
+  postalCode       String?
+
+  /// Contact (Step 3: CONTACT_ADDRESS — nullable until filled)
+  organizationEmail     String?
+  organizationPhone     String?
+  organizationWhatsApp  String?
+  websiteUrl            String?
+
+  /// Branding (Step 4: BRANDING — always optional)
+  logoUrl          String?
 
   // Relations
   memberships       Membership[]
   invitations       Invitation[]
 
-  profile           OrganizationProfile?
   contacts          OrganizationContact[]
   addresses         OrganizationAddress[]
   bankAccounts      OrganizationBank[]
@@ -145,27 +163,8 @@ model Organization {
   feeHeads          FeeHead[]
   feeStructures     FeeStructure[]
   feeChallans       FeeChallan[]
-}
 
-////////////////////////////////////////////////////////////
-/// ORGANIZATION PROFILE (LEGAL + CORE INFO)
-////////////////////////////////////////////////////////////
-
-model OrganizationProfile {
-  id                  Int       @id @default(autoincrement())
-  organizationId      String    @unique
-
-  legalName           String?
-  registrationNumber  String?
-  taxNumber           String?
-  establishedDate     DateTime?
-
-  organizationEmail   String?
-  organizationPhone   String?
-  websiteUrl          String?
-  logoUrl             String?
-
-  organization        Organization @relation(fields: [organizationId], references: [id])
+  @@index([status])
 }
 
 ////////////////////////////////////////////////////////////
