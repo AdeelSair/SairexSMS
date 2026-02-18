@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, Save } from "lucide-react";
 
-import { api } from "@/lib/api-client";
 import {
   onboardingLegalSchema,
   type OnboardingLegalInput,
 } from "@/lib/validations/onboarding";
+import { useOnboarding } from "../context";
 
 import { SxButton } from "@/components/sx";
 import {
@@ -22,45 +23,36 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
-interface LegalResponse {
-  message: string;
-  nextUrl: string;
-}
-
 export default function OnboardingLegalPage() {
   const router = useRouter();
+  const { draft, saveStep, markValidated } = useOnboarding();
 
   const form = useForm<OnboardingLegalInput>({
     resolver: zodResolver(onboardingLegalSchema),
-    defaultValues: {
+    defaultValues: draft.legal ?? {
       registrationNumber: "",
       taxNumber: "",
       establishedDate: "",
     },
   });
 
-  const {
-    handleSubmit,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit } = form;
 
-  const onSubmit = async (data: OnboardingLegalInput) => {
-    const result = await api.post<LegalResponse>("/api/onboarding/legal", data);
+  const onBack = () => {
+    saveStep("legal", form.getValues());
+    router.push("/onboarding/identity");
+  };
 
-    if (result.ok) {
-      toast.success("Legal information saved");
-      router.push(result.data.nextUrl);
-      router.refresh();
-    } else if (result.fieldErrors) {
-      for (const [field, messages] of Object.entries(result.fieldErrors)) {
-        form.setError(field as keyof OnboardingLegalInput, {
-          message: messages[0],
-        });
-      }
-      toast.error("Please fix the validation errors");
-    } else {
-      toast.error(result.error);
-    }
+  const onSave = (data: OnboardingLegalInput) => {
+    saveStep("legal", data);
+    markValidated("legal");
+    toast.success("Legal information saved");
+  };
+
+  const onNext = (data: OnboardingLegalInput) => {
+    saveStep("legal", data);
+    markValidated("legal");
+    router.push("/onboarding/contact-address");
   };
 
   return (
@@ -69,11 +61,12 @@ export default function OnboardingLegalPage() {
         Legal Information
       </h2>
       <p className="mb-6 text-sm text-muted-foreground">
-        Provide your organization&apos;s legal details. Enter &quot;N/A&quot; if not applicable.
+        Provide your organization&apos;s legal details. Enter &quot;N/A&quot; if
+        not applicable.
       </p>
 
       <Form {...form}>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form className="space-y-5">
           <FormField
             control={form.control}
             name="registrationNumber"
@@ -116,14 +109,35 @@ export default function OnboardingLegalPage() {
             )}
           />
 
-          <SxButton
-            type="submit"
-            sxVariant="primary"
-            loading={isSubmitting}
-            className="w-full py-3"
-          >
-            Save & Continue
-          </SxButton>
+          {/* ── Actions ── */}
+          <div className="flex items-center justify-between pt-2">
+            <SxButton
+              type="button"
+              sxVariant="ghost"
+              icon={<ArrowLeft size={16} />}
+              onClick={onBack}
+            >
+              Back
+            </SxButton>
+            <div className="flex gap-3">
+              <SxButton
+                type="button"
+                sxVariant="outline"
+                icon={<Save size={16} />}
+                onClick={handleSubmit(onSave)}
+              >
+                Save
+              </SxButton>
+              <SxButton
+                type="button"
+                sxVariant="primary"
+                icon={<ArrowRight size={16} />}
+                onClick={handleSubmit(onNext)}
+              >
+                Next
+              </SxButton>
+            </div>
+          </div>
         </form>
       </Form>
     </div>

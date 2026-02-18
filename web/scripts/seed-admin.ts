@@ -54,7 +54,8 @@ async function main() {
       // Core Identity
       organizationName: "Sairex Headquarters",
       displayName: "Sairex HQ",
-      organizationType: "ACADEMY",
+      organizationCategory: "ACADEMY",
+      organizationStructure: "SINGLE",
 
       // Legal
       registrationNumber: "N/A",

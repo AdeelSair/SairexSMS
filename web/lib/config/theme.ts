@@ -110,4 +110,10 @@ export const navigation: NavGroup[] = [
       { label: "Users & Invites", href: "/admin/users", icon: "Users" },
     ],
   },
+  {
+    label: "Development",
+    items: [
+      { label: "Dev Tools", href: "/admin/dev-tools", icon: "Wrench" },
+    ],
+  },
 ];

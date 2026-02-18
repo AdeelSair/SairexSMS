@@ -2,8 +2,12 @@ import { z } from "zod";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const ORGANIZATION_TYPE = [
-  "SINGLE_SCHOOL", "SCHOOL_SYSTEM", "COLLEGE", "ACADEMY", "UNIVERSITY", "INSTITUTE",
+const ORGANIZATION_CATEGORY = [
+  "SCHOOL", "COLLEGE", "ACADEMY", "INSTITUTE", "UNIVERSITY", "OTHERS",
+] as const;
+
+const ORGANIZATION_STRUCTURE = [
+  "SINGLE", "MULTIPLE",
 ] as const;
 
 // ─── Normalization ───────────────────────────────────────────────────────────
@@ -31,8 +35,12 @@ export const onboardingIdentitySchema = z.object({
     .max(100, "Display name must not exceed 100 characters")
     .transform(normalizeString),
 
-  organizationType: z.enum(ORGANIZATION_TYPE, {
-    message: "Please select a valid organization type",
+  organizationCategory: z.enum(ORGANIZATION_CATEGORY, {
+    message: "Please select a valid organization category",
+  }),
+
+  organizationStructure: z.enum(ORGANIZATION_STRUCTURE, {
+    message: "Please select a valid organization structure",
   }),
 });
 
@@ -145,5 +153,18 @@ export const onboardingBrandingSchema = z.object({
 export type OnboardingBrandingInput = z.input<typeof onboardingBrandingSchema>;
 export type OnboardingBrandingData = z.output<typeof onboardingBrandingSchema>;
 
+// ─── Combined: Full Onboarding Payload ─────────────────────────────────────
+
+export const onboardingCompleteSchema = z.object({
+  identity: onboardingIdentitySchema,
+  legal: onboardingLegalSchema,
+  contactAddress: onboardingContactAddressSchema,
+  branding: onboardingBrandingSchema,
+});
+
+export type OnboardingCompleteInput = z.input<typeof onboardingCompleteSchema>;
+export type OnboardingCompleteData = z.output<typeof onboardingCompleteSchema>;
+
 // Re-export constants
-export { ORGANIZATION_TYPE as ONBOARDING_ORGANIZATION_TYPE };
+export { ORGANIZATION_CATEGORY as ONBOARDING_ORGANIZATION_CATEGORY };
+export { ORGANIZATION_STRUCTURE as ONBOARDING_ORGANIZATION_STRUCTURE };

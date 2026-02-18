@@ -107,7 +107,10 @@ export const api = {
     });
   },
 
-  delete<T>(endpoint: string) {
-    return request<T>(endpoint, { method: "DELETE" });
+  delete<T>(endpoint: string, body?: unknown) {
+    return request<T>(endpoint, {
+      method: "DELETE",
+      body: body != null ? JSON.stringify(body) : undefined,
+    });
   },
 } as const;

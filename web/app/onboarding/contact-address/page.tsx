@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, Save } from "lucide-react";
 
-import { api } from "@/lib/api-client";
 import {
   onboardingContactAddressSchema,
   type OnboardingContactAddressInput,
 } from "@/lib/validations/onboarding";
+import { useOnboarding } from "../context";
 
 import { SxButton } from "@/components/sx";
 import {
@@ -22,17 +23,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
-interface ContactAddressResponse {
-  message: string;
-  nextUrl: string;
-}
-
 export default function OnboardingContactAddressPage() {
   const router = useRouter();
+  const { draft, saveStep, markValidated } = useOnboarding();
 
   const form = useForm<OnboardingContactAddressInput>({
     resolver: zodResolver(onboardingContactAddressSchema),
-    defaultValues: {
+    defaultValues: draft.contactAddress ?? {
       addressLine1: "",
       addressLine2: "",
       country: "Pakistan",
@@ -46,31 +43,23 @@ export default function OnboardingContactAddressPage() {
     },
   });
 
-  const {
-    handleSubmit,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit } = form;
 
-  const onSubmit = async (data: OnboardingContactAddressInput) => {
-    const result = await api.post<ContactAddressResponse>(
-      "/api/onboarding/contact-address",
-      data,
-    );
+  const onBack = () => {
+    saveStep("contactAddress", form.getValues());
+    router.push("/onboarding/legal");
+  };
 
-    if (result.ok) {
-      toast.success("Contact & address saved");
-      router.push(result.data.nextUrl);
-      router.refresh();
-    } else if (result.fieldErrors) {
-      for (const [field, messages] of Object.entries(result.fieldErrors)) {
-        form.setError(field as keyof OnboardingContactAddressInput, {
-          message: messages[0],
-        });
-      }
-      toast.error("Please fix the validation errors");
-    } else {
-      toast.error(result.error);
-    }
+  const onSave = (data: OnboardingContactAddressInput) => {
+    saveStep("contactAddress", data);
+    markValidated("contactAddress");
+    toast.success("Contact & address saved");
+  };
+
+  const onNext = (data: OnboardingContactAddressInput) => {
+    saveStep("contactAddress", data);
+    markValidated("contactAddress");
+    router.push("/onboarding/branding");
   };
 
   return (
@@ -79,11 +68,12 @@ export default function OnboardingContactAddressPage() {
         Contact & HQ Address
       </h2>
       <p className="mb-6 text-sm text-muted-foreground">
-        Provide your organization&apos;s headquarter address and contact information.
+        Provide your organization&apos;s headquarter address and contact
+        information.
       </p>
 
       <Form {...form}>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form className="space-y-6">
           {/* ── Address Section ── */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground">
@@ -97,7 +87,10 @@ export default function OnboardingContactAddressPage() {
                 <FormItem>
                   <FormLabel>Street Address</FormLabel>
                   <FormControl>
-                    <Input placeholder="123 Main Boulevard, DHA Phase 5" {...field} />
+                    <Input
+                      placeholder="123 Main Boulevard, DHA Phase 5"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -193,7 +186,11 @@ export default function OnboardingContactAddressPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="info@school.edu.pk" {...field} />
+                      <Input
+                        type="email"
+                        placeholder="info@school.edu.pk"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -246,14 +243,35 @@ export default function OnboardingContactAddressPage() {
             </div>
           </div>
 
-          <SxButton
-            type="submit"
-            sxVariant="primary"
-            loading={isSubmitting}
-            className="w-full py-3"
-          >
-            Save & Continue
-          </SxButton>
+          {/* ── Actions ── */}
+          <div className="flex items-center justify-between pt-2">
+            <SxButton
+              type="button"
+              sxVariant="ghost"
+              icon={<ArrowLeft size={16} />}
+              onClick={onBack}
+            >
+              Back
+            </SxButton>
+            <div className="flex gap-3">
+              <SxButton
+                type="button"
+                sxVariant="outline"
+                icon={<Save size={16} />}
+                onClick={handleSubmit(onSave)}
+              >
+                Save
+              </SxButton>
+              <SxButton
+                type="button"
+                sxVariant="primary"
+                icon={<ArrowRight size={16} />}
+                onClick={handleSubmit(onNext)}
+              >
+                Next
+              </SxButton>
+            </div>
+          </div>
         </form>
       </Form>
     </div>

@@ -4,13 +4,15 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { ArrowRight, Save } from "lucide-react";
 
-import { api } from "@/lib/api-client";
 import {
   onboardingIdentitySchema,
-  ONBOARDING_ORGANIZATION_TYPE,
+  ONBOARDING_ORGANIZATION_CATEGORY,
+  ONBOARDING_ORGANIZATION_STRUCTURE,
   type OnboardingIdentityInput,
 } from "@/lib/validations/onboarding";
+import { useOnboarding } from "../context";
 
 import { SxButton } from "@/components/sx";
 import {
@@ -37,46 +39,32 @@ function humanize(value: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-interface IdentityResponse {
-  message: string;
-  organizationId: string;
-  nextUrl: string;
-}
-
 export default function OnboardingIdentityPage() {
   const router = useRouter();
+  const { draft, saveStep, markValidated } = useOnboarding();
 
   const form = useForm<OnboardingIdentityInput>({
     resolver: zodResolver(onboardingIdentitySchema),
-    defaultValues: {
+    defaultValues: draft.identity ?? {
       organizationName: "",
       displayName: "",
-      organizationType: "SINGLE_SCHOOL",
+      organizationCategory: "SCHOOL",
+      organizationStructure: "SINGLE",
     },
   });
 
-  const {
-    handleSubmit,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit } = form;
 
-  const onSubmit = async (data: OnboardingIdentityInput) => {
-    const result = await api.post<IdentityResponse>("/api/onboarding/identity", data);
+  const onSave = (data: OnboardingIdentityInput) => {
+    saveStep("identity", data);
+    markValidated("identity");
+    toast.success("Identity saved");
+  };
 
-    if (result.ok) {
-      toast.success(`Organization created — ${result.data.organizationId}`);
-      router.push(result.data.nextUrl);
-      router.refresh();
-    } else if (result.fieldErrors) {
-      for (const [field, messages] of Object.entries(result.fieldErrors)) {
-        form.setError(field as keyof OnboardingIdentityInput, {
-          message: messages[0],
-        });
-      }
-      toast.error("Please fix the validation errors");
-    } else {
-      toast.error(result.error);
-    }
+  const onNext = (data: OnboardingIdentityInput) => {
+    saveStep("identity", data);
+    markValidated("identity");
+    router.push("/onboarding/legal");
   };
 
   return (
@@ -89,7 +77,7 @@ export default function OnboardingIdentityPage() {
       </p>
 
       <Form {...form}>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form className="space-y-5">
           <FormField
             control={form.control}
             name="organizationName"
@@ -118,39 +106,77 @@ export default function OnboardingIdentityPage() {
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="organizationType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Organization Type</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {ONBOARDING_ORGANIZATION_TYPE.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {humanize(t)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="organizationCategory"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {ONBOARDING_ORGANIZATION_CATEGORY.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {humanize(c)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <SxButton
-            type="submit"
-            sxVariant="primary"
-            loading={isSubmitting}
-            className="w-full py-3"
-          >
-            Save & Continue
-          </SxButton>
+            <FormField
+              control={form.control}
+              name="organizationStructure"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Structure</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select structure" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {ONBOARDING_ORGANIZATION_STRUCTURE.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {humanize(s)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* ── Actions ── */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <SxButton
+              type="button"
+              sxVariant="outline"
+              icon={<Save size={16} />}
+              onClick={handleSubmit(onSave)}
+            >
+              Save
+            </SxButton>
+            <SxButton
+              type="button"
+              sxVariant="primary"
+              icon={<ArrowRight size={16} />}
+              onClick={handleSubmit(onNext)}
+            >
+              Next
+            </SxButton>
+          </div>
         </form>
       </Form>
     </div>

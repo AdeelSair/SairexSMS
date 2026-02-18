@@ -2,8 +2,12 @@ import { z } from "zod";
 
 // ─── Shared Constants ────────────────────────────────────────────────────────
 
-const ORGANIZATION_TYPE = [
-  "SINGLE_SCHOOL", "SCHOOL_SYSTEM", "COLLEGE", "ACADEMY", "UNIVERSITY", "INSTITUTE",
+const ORGANIZATION_CATEGORY = [
+  "SCHOOL", "COLLEGE", "ACADEMY", "INSTITUTE", "UNIVERSITY", "OTHERS",
+] as const;
+
+const ORGANIZATION_STRUCTURE = [
+  "SINGLE", "MULTIPLE",
 ] as const;
 
 const ORGANIZATION_STATUS = ["ACTIVE", "SUSPENDED", "ARCHIVED"] as const;
@@ -54,8 +58,12 @@ export const createOrganizationSchema = z
       .or(z.literal(""))
       .default(""),
 
-    organizationType: z.enum(ORGANIZATION_TYPE, {
-      message: "Please select a valid organization type",
+    organizationCategory: z.enum(ORGANIZATION_CATEGORY, {
+      message: "Please select a valid organization category",
+    }),
+
+    organizationStructure: z.enum(ORGANIZATION_STRUCTURE, {
+      message: "Please select a valid organization structure",
     }),
 
     status: z.enum(ORGANIZATION_STATUS, {
@@ -102,8 +110,12 @@ export const updateOrganizationSchema = z
       )
       .optional(),
 
-    organizationType: z.enum(ORGANIZATION_TYPE, {
-      message: "Please select a valid organization type",
+    organizationCategory: z.enum(ORGANIZATION_CATEGORY, {
+      message: "Please select a valid organization category",
+    }).optional(),
+
+    organizationStructure: z.enum(ORGANIZATION_STRUCTURE, {
+      message: "Please select a valid organization structure",
     }).optional(),
 
     status: z.enum(ORGANIZATION_STATUS, {
@@ -119,4 +131,4 @@ export type UpdateOrganizationInput = z.input<typeof updateOrganizationSchema>;
 export type UpdateOrganizationData = z.output<typeof updateOrganizationSchema>;
 
 // Re-export constants for use in UI dropdowns
-export { ORGANIZATION_TYPE, ORGANIZATION_STATUS };
+export { ORGANIZATION_CATEGORY, ORGANIZATION_STRUCTURE, ORGANIZATION_STATUS };

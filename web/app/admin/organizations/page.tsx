@@ -9,7 +9,8 @@ import { Plus, Hash } from "lucide-react";
 import { api } from "@/lib/api-client";
 import {
   createOrganizationSchema,
-  ORGANIZATION_TYPE,
+  ORGANIZATION_CATEGORY,
+  ORGANIZATION_STRUCTURE,
   ORGANIZATION_STATUS,
   type CreateOrganizationInput,
 } from "@/lib/validations/organization";
@@ -56,7 +57,8 @@ interface Organization {
   organizationName: string;
   displayName: string;
   slug: string;
-  organizationType: string;
+  organizationCategory: string;
+  organizationStructure: string;
   status: string;
   onboardingStep: string;
   organizationEmail: string | null;
@@ -97,11 +99,20 @@ const columns: SxColumn<Organization>[] = [
     ),
   },
   {
-    key: "organizationType",
-    header: "Type",
+    key: "organizationCategory",
+    header: "Category",
     render: (row) => (
       <SxStatusBadge variant="info">
-        {humanize(row.organizationType)}
+        {humanize(row.organizationCategory)}
+      </SxStatusBadge>
+    ),
+  },
+  {
+    key: "organizationStructure",
+    header: "Structure",
+    render: (row) => (
+      <SxStatusBadge variant={row.organizationStructure === "MULTIPLE" ? "warning" : "success"}>
+        {humanize(row.organizationStructure)}
       </SxStatusBadge>
     ),
   },
@@ -187,7 +198,8 @@ export default function OrganizationsPage() {
       organizationName: "",
       displayName: "",
       slug: "",
-      organizationType: "SINGLE_SCHOOL",
+      organizationCategory: "SCHOOL",
+      organizationStructure: "SINGLE",
       status: "ACTIVE",
     },
   });
@@ -352,23 +364,23 @@ export default function OrganizationsPage() {
               <SxFormSection columns={2}>
                 <FormField
                   control={form.control}
-                  name="organizationType"
+                  name="organizationCategory"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Type</FormLabel>
+                      <FormLabel>Category</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={field.onChange}
                       >
                         <FormControl>
                           <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select type" />
+                            <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {ORGANIZATION_TYPE.map((t) => (
-                            <SelectItem key={t} value={t}>
-                              {humanize(t)}
+                          {ORGANIZATION_CATEGORY.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {humanize(c)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -378,6 +390,37 @@ export default function OrganizationsPage() {
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="organizationStructure"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Structure</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select structure" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ORGANIZATION_STRUCTURE.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {humanize(s)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SxFormSection>
+
+              {/* ── Section 3: Status ──────────────────────── */}
+              <SxFormSection columns={2}>
                 <FormField
                   control={form.control}
                   name="status"

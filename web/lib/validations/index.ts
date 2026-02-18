@@ -4,7 +4,8 @@
 export {
   createOrganizationSchema,
   updateOrganizationSchema,
-  ORGANIZATION_TYPE,
+  ORGANIZATION_CATEGORY,
+  ORGANIZATION_STRUCTURE,
   ORGANIZATION_STATUS,
   type CreateOrganizationInput,
   type CreateOrganizationData,
@@ -47,7 +48,9 @@ export {
   onboardingLegalSchema,
   onboardingContactAddressSchema,
   onboardingBrandingSchema,
-  ONBOARDING_ORGANIZATION_TYPE,
+  onboardingCompleteSchema,
+  ONBOARDING_ORGANIZATION_CATEGORY,
+  ONBOARDING_ORGANIZATION_STRUCTURE,
   type OnboardingIdentityInput,
   type OnboardingIdentityData,
   type OnboardingLegalInput,
@@ -56,4 +59,6 @@ export {
   type OnboardingContactAddressData,
   type OnboardingBrandingInput,
   type OnboardingBrandingData,
+  type OnboardingCompleteInput,
+  type OnboardingCompleteData,
 } from "./onboarding";

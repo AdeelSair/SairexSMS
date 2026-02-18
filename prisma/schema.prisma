@@ -38,13 +38,18 @@ enum MembershipStatus {
   SUSPENDED
 }
 
-enum OrganizationType {
-  SINGLE_SCHOOL
-  SCHOOL_SYSTEM
+enum OrganizationCategory {
+  SCHOOL
   COLLEGE
   ACADEMY
-  UNIVERSITY
   INSTITUTE
+  UNIVERSITY
+  OTHERS
+}
+
+enum OrganizationStructure {
+  SINGLE
+  MULTIPLE
 }
 
 enum OrganizationStatus {
@@ -125,7 +130,8 @@ model Organization {
   /// Core Identity (Step 1: ORG_IDENTITY)
   organizationName String
   displayName      String
-  organizationType OrganizationType
+  organizationCategory  OrganizationCategory
+  organizationStructure OrganizationStructure
 
   /// Legal (Step 2: LEGAL — nullable until filled)
   registrationNumber String?
