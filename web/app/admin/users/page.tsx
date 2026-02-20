@@ -45,18 +45,11 @@ interface Org {
   organizationName: string;
 }
 
-interface Region {
-  id: number;
-  name: string;
-  city: string;
-  organizationId: string;
-}
-
 interface CampusRef {
   id: number;
   name: string;
   organizationId: string;
-  regionId: number | null;
+  city?: { id: string; name: string };
 }
 
 interface User {
@@ -66,7 +59,7 @@ interface User {
   isActive: boolean;
   campusId: number | null;
   organization: { id: string; organizationName: string };
-  campus: { id: number; name: string; regionId: number | null } | null;
+  campus: { id: number; name: string; city?: { id: string; name: string } } | null;
 }
 
 interface Invite {
@@ -83,7 +76,6 @@ interface InvitesResponse {
   users: User[];
   pendingInvites: Invite[];
   organizations: Org[];
-  regions: Region[];
   campuses: CampusRef[];
   isSuperAdmin: boolean;
 }
@@ -92,8 +84,7 @@ interface InviteFormValues {
   email: string;
   role: string;
   organizationId: string;
-  regionId: string;
-  campusId: string;
+    campusId: string;
 }
 
 /* ── Role badge helper ─────────────────────────────────────── */
@@ -112,13 +103,10 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [organizations, setOrganizations] = useState<Org[]>([]);
-  const [regions, setRegions] = useState<Region[]>([]);
   const [campuses, setCampuses] = useState<CampusRef[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Filter state
-  const [filterRegionId, setFilterRegionId] = useState("");
   const [filterCampusId, setFilterCampusId] = useState("");
 
   // Dialog
@@ -135,7 +123,6 @@ export default function UsersPage() {
       setUsers(result.data.users || []);
       setInvites(result.data.pendingInvites || []);
       setOrganizations(result.data.organizations || []);
-      setRegions(result.data.regions || []);
       setCampuses(result.data.campuses || []);
       setIsSuperAdmin(result.data.isSuperAdmin || false);
     } else {
@@ -150,28 +137,12 @@ export default function UsersPage() {
 
   /* ── Derived filter lists ──────────────────────────────── */
 
-  const filterCampusList = useMemo(() => {
-    if (!filterRegionId) return campuses;
-    return campuses.filter((c) => c.regionId === parseInt(filterRegionId));
-  }, [campuses, filterRegionId]);
-
   const filteredUsers = useMemo(() => {
-    let list = users;
-    if (filterRegionId) {
-      const campusIds = new Set(
-        campuses
-          .filter((c) => c.regionId === parseInt(filterRegionId))
-          .map((c) => c.id),
-      );
-      list = list.filter((u) => u.campusId && campusIds.has(u.campusId));
-    }
-    if (filterCampusId) {
-      list = list.filter((u) => u.campusId === parseInt(filterCampusId));
-    }
-    return list;
-  }, [users, campuses, filterRegionId, filterCampusId]);
+    if (!filterCampusId) return users;
+    return users.filter((u) => u.campusId === parseInt(filterCampusId));
+  }, [users, filterCampusId]);
 
-  const hasFilters = !!(filterRegionId || filterCampusId);
+  const hasFilters = !!filterCampusId;
 
   /* ── Invite form ───────────────────────────────────────── */
 
@@ -180,7 +151,6 @@ export default function UsersPage() {
       email: "",
       role: "TEACHER",
       organizationId: "",
-      regionId: "",
       campusId: "",
     },
   });
@@ -193,23 +163,12 @@ export default function UsersPage() {
   } = form;
 
   const inviteOrgId = watch("organizationId");
-  const inviteRegionId = watch("regionId");
-
-  const inviteRegionList = useMemo(() => {
-    if (isSuperAdmin && inviteOrgId) {
-      return regions.filter((r) => r.organizationId === inviteOrgId);
-    }
-    return regions;
-  }, [regions, isSuperAdmin, inviteOrgId]);
 
   const inviteCampusList = useMemo(() => {
-    let list = campuses;
     if (isSuperAdmin && inviteOrgId)
-      list = list.filter((c) => c.organizationId === inviteOrgId);
-    if (inviteRegionId)
-      list = list.filter((c) => c.regionId === parseInt(inviteRegionId));
-    return list;
-  }, [campuses, isSuperAdmin, inviteOrgId, inviteRegionId]);
+      return campuses.filter((c) => c.organizationId === inviteOrgId);
+    return campuses;
+  }, [campuses, isSuperAdmin, inviteOrgId]);
 
   const onInviteSubmit = async (data: InviteFormValues) => {
     const body: Record<string, string> = {
@@ -412,63 +371,36 @@ export default function UsersPage() {
       />
 
       {/* ── Filter bar ─────────────────────────────────────── */}
-      {(regions.length > 0 || campuses.length > 0) && (
+      {campuses.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
           <span className="text-sm font-medium text-muted-foreground">
             Filter:
           </span>
 
-          {regions.length > 0 && (
-            <Select
-              value={filterRegionId || "all"}
-              onValueChange={(val) => {
-                setFilterRegionId(val === "all" ? "" : val);
-                setFilterCampusId("");
-              }}
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="All regions" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Regions</SelectItem>
-                {regions.map((r) => (
-                  <SelectItem key={r.id} value={r.id.toString()}>
-                    {r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {filterCampusList.length > 0 && (
-            <Select
-              value={filterCampusId || "all"}
-              onValueChange={(val) =>
-                setFilterCampusId(val === "all" ? "" : val)
-              }
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="All campuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Campuses</SelectItem>
-                {filterCampusList.map((c) => (
-                  <SelectItem key={c.id} value={c.id.toString()}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <Select
+            value={filterCampusId || "all"}
+            onValueChange={(val) =>
+              setFilterCampusId(val === "all" ? "" : val)
+            }
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="All campuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Campuses</SelectItem>
+              {campuses.map((c) => (
+                <SelectItem key={c.id} value={c.id.toString()}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {hasFilters && (
             <SxButton
               sxVariant="ghost"
               size="sm"
-              onClick={() => {
-                setFilterRegionId("");
-                setFilterCampusId("");
-              }}
+              onClick={() => setFilterCampusId("")}
             >
               Clear filters
             </SxButton>
@@ -551,7 +483,7 @@ export default function UsersPage() {
                         value={field.value}
                         onValueChange={(val) => {
                           field.onChange(val);
-                          form.setValue("regionId", "");
+                          form.setValue("campusId", "");
                           form.setValue("campusId", "");
                         }}
                       >
@@ -574,41 +506,8 @@ export default function UsersPage() {
                 />
               )}
 
-              {/* Region + Campus */}
+              {/* Campus */}
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="regionId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Region (optional)</FormLabel>
-                      <Select
-                        value={field.value || "all"}
-                        onValueChange={(val) => {
-                          field.onChange(val === "all" ? "" : val);
-                          form.setValue("campusId", "");
-                        }}
-                        disabled={isSuperAdmin && !inviteOrgId}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="All regions" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="all">All Regions</SelectItem>
-                          {inviteRegionList.map((r) => (
-                            <SelectItem key={r.id} value={r.id.toString()}>
-                              {r.name} — {r.city}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <FormField
                   control={form.control}
                   name="campusId"

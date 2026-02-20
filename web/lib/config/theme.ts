@@ -93,7 +93,7 @@ export const navigation: NavGroup[] = [
     label: "Core Setup",
     items: [
       { label: "Organizations", href: "/admin/organizations", icon: "Building2" },
-      { label: "Regional Offices", href: "/admin/regions", icon: "Map" },
+      { label: "Geo Hierarchy", href: "/admin/regions", icon: "Map" },
       { label: "Campuses", href: "/admin/campuses", icon: "School" },
     ],
   },

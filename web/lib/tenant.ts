@@ -66,7 +66,7 @@ export function resolveOrgId(
 
 type CrossRefCheck = {
   /** Prisma model name (lowercase, matching prisma client accessor) */
-  model: "campus" | "regionalOffice" | "feeHead" | "student";
+  model: "campus" | "feeHead" | "student";
   /** The ID value supplied by the client */
   id: number;
   /** Human-readable label for error messages */
@@ -89,12 +89,6 @@ export async function validateCrossRefs(
     switch (check.model) {
       case "campus":
         record = await prisma.campus.findUnique({
-          where: { id: check.id },
-          select: { organizationId: true },
-        });
-        break;
-      case "regionalOffice":
-        record = await prisma.regionalOffice.findUnique({
           where: { id: check.id },
           select: { organizationId: true },
         });

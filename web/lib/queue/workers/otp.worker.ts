@@ -20,49 +20,74 @@ async function processOtpJob(bull: BullJob<OtpJobData>): Promise<void> {
     data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
   });
 
-  let success = false;
+  try {
+    let success = false;
 
-  if (channel === "email") {
-    success = await sendEmail({
-      to: target,
-      subject: "Your verification code — SAIREX SMS",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-          <h2 style="color: #1e40af;">SAIREX SMS</h2>
-          <p>Your verification code is:</p>
-          <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; margin: 24px 0; color: #1e40af;">${code}</p>
-          <p style="color: #64748b; font-size: 14px;">
-            This code expires in 10 minutes. If you didn't request this, ignore this message.
-          </p>
-        </div>
-      `,
+    if (channel === "email") {
+      success = await sendEmail({
+        to: target,
+        subject: "Your verification code — SAIREX SMS",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">SAIREX SMS</h2>
+            <p>Your verification code is:</p>
+            <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; margin: 24px 0; color: #1e40af;">${code}</p>
+            <p style="color: #64748b; font-size: 14px;">
+              This code expires in 10 minutes. If you didn't request this, ignore this message.
+            </p>
+          </div>
+        `,
+      });
+    } else if (channel === "mobile") {
+      const hash = process.env.VEEVO_HASH;
+      const sender = process.env.VEEVO_SENDER;
+
+      if (!hash || !sender) {
+        console.log(`[OTP Worker] DEV MODE — SMS → ${target}: ${code}`);
+        success = true;
+      } else {
+        const axios = (await import("axios")).default;
+        const msg = `Your SAIREX SMS verification code is: ${code}. Valid for 10 minutes.`;
+        const url = `https://api.veevotech.com/sendsms?hash=${hash}&receivenum=${encodeURIComponent(target)}&sendernum=${encodeURIComponent(sender)}&textmessage=${encodeURIComponent(msg)}`;
+        const res = await axios.get(url);
+        success = res.status === 200;
+      }
+    } else if (channel === "whatsapp") {
+      const { sendWhatsAppMessage } = await import("@/lib/whatsapp");
+      try {
+        await sendWhatsAppMessage(target, `Your SAIREX SMS verification code is: ${code}`);
+        success = true;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Unknown WhatsApp error";
+        if (errorMsg.includes("init") || errorMsg.includes("not ready")) {
+          console.log(`[OTP Worker] DEV MODE — WhatsApp → ${target}: ${code}`);
+          success = true;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    if (!success) {
+      throw new Error(`OTP delivery failed via ${channel} to ${target}`);
+    }
+
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { status: "COMPLETED", completedAt: new Date(), error: null },
     });
-  } else if (channel === "mobile") {
-    // TODO: plug in SMS gateway (Veevo / Twilio)
-    console.log(`[OTP Worker] SMS → ${target}: ${code}`);
-    success = true;
-  } else if (channel === "whatsapp") {
-    // TODO: plug in WhatsApp client
-    console.log(`[OTP Worker] WhatsApp → ${target}: ${code}`);
-    success = true;
-  }
-
-  if (!success) {
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown OTP error";
     await prisma.job.update({
       where: { id: jobId },
       data: {
         status: bull.attemptsMade + 1 >= (bull.opts.attempts ?? 3) ? "DEAD" : "FAILED",
         failedAt: new Date(),
-        error: `OTP delivery failed via ${channel} to ${target}`,
+        error: errorMsg,
       },
     });
-    throw new Error(`OTP delivery failed via ${channel} to ${target}`);
+    throw new Error(`OTP delivery failed to ${target}: ${errorMsg}`);
   }
-
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "COMPLETED", completedAt: new Date(), error: null },
-  });
 }
 
 export function startOtpWorker(): Worker<OtpJobData> {

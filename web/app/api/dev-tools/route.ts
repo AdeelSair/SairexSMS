@@ -149,7 +149,6 @@ export async function DELETE(request: Request) {
         await tx.organizationAddress.deleteMany({ where: { organizationId: orgId } });
         await tx.organizationBank.deleteMany({ where: { organizationId: orgId } });
         await tx.campus.deleteMany({ where: { organizationId: orgId } });
-        await tx.regionalOffice.deleteMany({ where: { organizationId: orgId } });
         await tx.organization.delete({ where: { id: orgId } });
       });
 

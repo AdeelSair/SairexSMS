@@ -74,6 +74,14 @@ enum AddressType {
   OTHER
 }
 
+enum UnitScopeType {
+  REGION
+  SUBREGION
+  CITY
+  ZONE
+  CAMPUS
+}
+
 ////////////////////////////////////////////////////////////
 /// USER (GLOBAL IDENTITY)
 ////////////////////////////////////////////////////////////
@@ -192,7 +200,6 @@ model Organization {
   addresses         OrganizationAddress[]
   bankAccounts      OrganizationBank[]
 
-  regionalOffices   RegionalOffice[]
   campuses          Campus[]
   students          Student[]
   feeHeads          FeeHead[]
@@ -277,19 +284,66 @@ model OrganizationBank {
 }
 
 ////////////////////////////////////////////////////////////
-/// REGIONAL OFFICE (Optional Tier)
+/// UNIT CODE SEQUENCE (Race-safe auto-increment per scope)
 ////////////////////////////////////////////////////////////
 
-model RegionalOffice {
-  id              Int          @id @default(autoincrement())
-  organizationId  String       @db.VarChar(11)
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  name            String
-  city            String
-  directorName    String?
-  contactEmail    String?
-  status          String       @default("ACTIVE")
-  campuses        Campus[]
+model UnitCodeSequence {
+  id        String        @id @default(cuid())
+  scopeType UnitScopeType
+  scopeId   String?
+  lastValue Int           @default(0)
+
+  @@unique([scopeType, scopeId])
+}
+
+////////////////////////////////////////////////////////////
+/// GEO HIERARCHY: Region → SubRegion → City → Zone
+////////////////////////////////////////////////////////////
+
+model Region {
+  id       String @id @default(cuid())
+  name     String
+  unitCode String @unique @db.VarChar(5)
+
+  subRegions SubRegion[]
+  cities     City[]
+}
+
+model SubRegion {
+  id       String @id @default(cuid())
+  name     String
+  unitCode String @db.VarChar(5)
+
+  regionId String?
+  region   Region? @relation(fields: [regionId], references: [id])
+
+  cities City[]
+}
+
+model City {
+  id       String @id @default(cuid())
+  name     String
+  unitCode String @unique @db.VarChar(5)
+
+  regionId    String?
+  subRegionId String?
+
+  region    Region?    @relation(fields: [regionId], references: [id])
+  subRegion SubRegion? @relation(fields: [subRegionId], references: [id])
+
+  zones    Zone[]
+  campuses Campus[]
+}
+
+model Zone {
+  id       String @id @default(cuid())
+  name     String
+  unitCode String @db.VarChar(5)
+
+  cityId String
+  city   City @relation(fields: [cityId], references: [id])
+
+  campuses Campus[]
 }
 
 ////////////////////////////////////////////////////////////
@@ -300,13 +354,19 @@ model Campus {
   id                Int             @id @default(autoincrement())
   organizationId    String          @db.VarChar(11)
   organization      Organization    @relation(fields: [organizationId], references: [id])
-  regionId          Int?
-  region            RegionalOffice? @relation(fields: [regionId], references: [id])
   name              String
   campusCode        String          @unique
   campusSlug        String          @unique
+  unitCode          String          @db.VarChar(5)
+  fullUnitPath      String          @db.VarChar(50)
   address           String?
-  city              String
+
+  cityId            String
+  city              City            @relation(fields: [cityId], references: [id])
+
+  zoneId            String?
+  zone              Zone?           @relation(fields: [zoneId], references: [id])
+
   principalName     String?
   contactPhone      String?
   email             String?
@@ -320,6 +380,8 @@ model Campus {
   students          Student[]
   feeStructures     FeeStructure[]
   feeChallans       FeeChallan[]
+
+  @@index([fullUnitPath])
 }
 
 ////////////////////////////////////////////////////////////

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 
@@ -45,45 +47,61 @@ interface Organization {
   organizationName: string;
 }
 
-interface Region {
-  id: number;
+interface GeoCity {
+  id: string;
   name: string;
-  city: string;
-  organizationId: string;
+}
+
+interface GeoZone {
+  id: string;
+  name: string;
+  cityId: string;
 }
 
 interface Campus {
   id: number;
   name: string;
   campusCode: string;
-  city: string;
+  unitCode: string;
+  fullUnitPath: string;
   status: string;
   organizationId: string;
-  regionId: number | null;
+  cityId: string;
+  zoneId: string | null;
   organization: { id: string; organizationName: string };
-  region: { id: number; name: string; city: string } | null;
+  city: { id: string; name: string; unitCode: string; region?: { id: string; name: string; unitCode: string } | null };
+  zone: { id: string; name: string; unitCode: string } | null;
 }
 
-interface CampusFormValues {
-  name: string;
-  campusCode: string;
-  city: string;
-  organizationId: string;
-  regionId: string;
-}
+/* ── Zod schema ────────────────────────────────────────────── */
+
+const campusSchema = z.object({
+  name: z.string().min(1, "Campus name is required"),
+  campusCode: z.string().min(1, "Campus code is required"),
+  organizationId: z.string().min(1, "Organization is required"),
+  cityId: z.string().min(1, "City is required"),
+  zoneId: z.string().optional(),
+});
+
+type CampusFormValues = z.infer<typeof campusSchema>;
 
 /* ── Column definitions ────────────────────────────────────── */
 
 const columns: SxColumn<Campus>[] = [
+  {
+    key: "fullUnitPath",
+    header: "Unit Path",
+    render: (row) => (
+      <span className="font-data font-medium text-primary tracking-wide">{row.fullUnitPath}</span>
+    ),
+  },
   {
     key: "name",
     header: "Campus Name",
     render: (row) => (
       <div>
         <div className="font-medium">{row.name}</div>
-        <div className="text-xs text-muted-foreground font-data">
-          {row.campusCode}
-        </div>
+        <div className="text-xs text-muted-foreground font-data">{row.campusCode}</div>
       </div>
     ),
   },
@@ -91,26 +109,30 @@ const columns: SxColumn<Campus>[] = [
     key: "organization",
     header: "Organization",
     render: (row) => (
-      <span className="text-muted-foreground">
-        {row.organization?.organizationName}
-      </span>
+      <span className="text-muted-foreground">{row.organization?.organizationName}</span>
     ),
-  },
-  {
-    key: "region",
-    header: "Region",
-    render: (row) =>
-      row.region ? (
-        <SxStatusBadge variant="info">{row.region.name}</SxStatusBadge>
-      ) : (
-        <span className="text-xs text-muted-foreground italic">
-          Independent
-        </span>
-      ),
   },
   {
     key: "city",
     header: "City",
+    render: (row) => (
+      <div>
+        <div>{row.city?.name}</div>
+        {row.city?.region && (
+          <div className="text-xs text-muted-foreground">{row.city.region.name}</div>
+        )}
+      </div>
+    ),
+  },
+  {
+    key: "zone",
+    header: "Zone",
+    render: (row) =>
+      row.zone ? (
+        <SxStatusBadge variant="info">{row.zone.name}</SxStatusBadge>
+      ) : (
+        <span className="text-xs text-muted-foreground italic">—</span>
+      ),
   },
   {
     key: "status",
@@ -124,69 +146,58 @@ const columns: SxColumn<Campus>[] = [
 export default function CampusesPage() {
   const [campuses, setCampuses] = useState<Campus[]>([]);
   const [orgs, setOrgs] = useState<Organization[]>([]);
-  const [regions, setRegions] = useState<Region[]>([]);
+  const [cities, setCities] = useState<GeoCity[]>([]);
+  const [zones, setZones] = useState<GeoZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  /* ── Fetch data ────────────────────────────────────────── */
-
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [camResult, orgResult, regResult] = await Promise.all([
+    const [camResult, orgResult, geoResult] = await Promise.all([
       api.get<Campus[]>("/api/campuses"),
       api.get<Organization[]>("/api/organizations"),
-      api.get<Region[]>("/api/regions"),
+      api.get<{ cities: GeoCity[]; zones: GeoZone[] }>("/api/regions"),
     ]);
     if (camResult.ok) setCampuses(camResult.data);
     else toast.error(camResult.error);
     if (orgResult.ok) setOrgs(orgResult.data);
-    if (regResult.ok) setRegions(regResult.data);
+    if (geoResult.ok) {
+      setCities(geoResult.data.cities);
+      setZones(geoResult.data.zones);
+    }
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  /* ── Form ──────────────────────────────────────────────── */
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const form = useForm<CampusFormValues>({
-    defaultValues: {
-      name: "",
-      campusCode: "",
-      city: "",
-      organizationId: "",
-      regionId: "",
-    },
+    resolver: zodResolver(campusSchema),
+    defaultValues: { name: "", campusCode: "", organizationId: "", cityId: "", zoneId: "" },
   });
 
-  const {
-    handleSubmit,
-    reset,
-    watch,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit, reset, watch, formState: { isSubmitting } } = form;
+  const selectedCityId = watch("cityId");
 
-  const selectedOrgId = watch("organizationId");
-
-  const filteredRegions = useMemo(
-    () =>
-      selectedOrgId
-        ? regions.filter((r) => r.organizationId === selectedOrgId)
-        : [],
-    [regions, selectedOrgId],
+  const filteredZones = useMemo(
+    () => (selectedCityId ? zones.filter((z) => z.cityId === selectedCityId) : []),
+    [zones, selectedCityId],
   );
 
   const onSubmit = async (data: CampusFormValues) => {
     const result = await api.post<Campus>("/api/campuses", {
       ...data,
-      regionId: data.regionId || null,
+      zoneId: data.zoneId || null,
     });
     if (result.ok) {
       toast.success("Campus registered successfully");
       setIsDialogOpen(false);
       reset();
       fetchData();
+    } else if (result.fieldErrors) {
+      for (const [field, messages] of Object.entries(result.fieldErrors)) {
+        form.setError(field as keyof CampusFormValues, { message: messages[0] });
+      }
+      toast.error("Please fix the validation errors");
     } else {
       toast.error(result.error);
     }
@@ -197,19 +208,13 @@ export default function CampusesPage() {
     if (!open) reset();
   };
 
-  /* ── Render ────────────────────────────────────────────── */
-
   return (
     <div className="space-y-6">
       <SxPageHeader
         title="Campuses"
         subtitle="Manage school branches and operational units"
         actions={
-          <SxButton
-            sxVariant="primary"
-            icon={<Plus size={16} />}
-            onClick={() => setIsDialogOpen(true)}
-          >
+          <SxButton sxVariant="primary" icon={<Plus size={16} />} onClick={() => setIsDialogOpen(true)}>
             Add Campus
           </SxButton>
         }
@@ -222,157 +227,91 @@ export default function CampusesPage() {
         emptyMessage="No campuses found. Register one to get started."
       />
 
-      {/* ── Create dialog ──────────────────────────────────── */}
       <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Register New Campus</DialogTitle>
-            <DialogDescription>
-              Add a new school branch under an organization.
-            </DialogDescription>
+            <DialogDescription>Add a new school branch under an organization.</DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* Parent org */}
-              <FormField
-                control={form.control}
-                name="organizationId"
-                rules={{ required: "Organization is required" }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Parent Organization</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={(val) => {
-                        field.onChange(val);
-                        form.setValue("regionId", "");
-                      }}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select organization" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {orgs.map((org) => (
-                          <SelectItem key={org.id} value={org.id}>
-                            {org.organizationName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="organizationId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Parent Organization</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select organization" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {orgs.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>{org.organizationName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
 
-              {/* Region (optional, filtered by org) */}
-              <FormField
-                control={form.control}
-                name="regionId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Region (Optional)</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={!selectedOrgId}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue
-                            placeholder={
-                              selectedOrgId
-                                ? "Independent / No Region"
-                                : "Select org first"
-                            }
-                          />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">
-                          Independent / No Region
-                        </SelectItem>
-                        {filteredRegions.map((r) => (
-                          <SelectItem key={r.id} value={r.id.toString()}>
-                            {r.name} — {r.city}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Name + Code */}
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  rules={{ required: "Campus name is required" }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Campus Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. Islamabad Campus"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="campusCode"
-                  rules={{ required: "Campus code is required" }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Campus Code</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. ISB-01" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <FormField control={form.control} name="name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Campus Name</FormLabel>
+                    <FormControl><Input placeholder="e.g. Islamabad Campus" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="campusCode" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Campus Code</FormLabel>
+                    <FormControl><Input placeholder="e.g. ISB-01" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </div>
 
-              {/* City */}
-              <FormField
-                control={form.control}
-                name="city"
-                rules={{ required: "City is required" }}
-                render={({ field }) => (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField control={form.control} name="cityId" render={({ field }) => (
                   <FormItem>
                     <FormLabel>City</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Islamabad" {...field} />
-                    </FormControl>
+                    <Select value={field.value} onValueChange={(val) => { field.onChange(val); form.setValue("zoneId", ""); }}>
+                      <FormControl>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select city" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {cities.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
+                )} />
+
+                <FormField control={form.control} name="zoneId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Zone (optional)</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange} disabled={!selectedCityId || filteredZones.length === 0}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={selectedCityId ? (filteredZones.length > 0 ? "Select zone" : "No zones") : "Select city first"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {filteredZones.map((z) => (
+                          <SelectItem key={z.id} value={z.id}>{z.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
 
               <DialogFooter>
-                <SxButton
-                  type="button"
-                  sxVariant="outline"
-                  onClick={() => handleOpenChange(false)}
-                >
-                  Cancel
-                </SxButton>
-                <SxButton
-                  type="submit"
-                  sxVariant="primary"
-                  loading={isSubmitting}
-                >
-                  Register Campus
-                </SxButton>
+                <SxButton type="button" sxVariant="outline" onClick={() => handleOpenChange(false)}>Cancel</SxButton>
+                <SxButton type="submit" sxVariant="primary" loading={isSubmitting}>Register Campus</SxButton>
               </DialogFooter>
             </form>
           </Form>

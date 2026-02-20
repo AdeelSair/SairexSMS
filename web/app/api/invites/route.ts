@@ -20,7 +20,7 @@ export async function GET() {
     const isSA = isSuperAdmin(guard);
     const where = scopeFilter(guard);
 
-    const [memberships, invitations, organizations, regions, campuses] =
+    const [memberships, invitations, organizations, campuses] =
       await Promise.all([
         prisma.membership.findMany({
           where: {
@@ -33,7 +33,13 @@ export async function GET() {
             campusId: true,
             status: true,
             organization: { select: { id: true, organizationName: true } },
-            campus: { select: { id: true, name: true, regionId: true } },
+            campus: {
+              select: {
+                id: true,
+                name: true,
+                city: { select: { id: true, name: true } },
+              },
+            },
             user: {
               select: {
                 id: true,
@@ -72,23 +78,13 @@ export async function GET() {
               where: { id: guard.organizationId ?? undefined },
               select: { id: true, organizationName: true },
             }),
-        prisma.regionalOffice.findMany({
-          where,
-          select: {
-            id: true,
-            name: true,
-            city: true,
-            organizationId: true,
-          },
-          orderBy: { name: "asc" },
-        }),
         prisma.campus.findMany({
           where,
           select: {
             id: true,
             name: true,
             organizationId: true,
-            regionId: true,
+            city: { select: { id: true, name: true } },
           },
           orderBy: { name: "asc" },
         }),
@@ -118,7 +114,6 @@ export async function GET() {
         organization: inv.organization,
       })),
       organizations,
-      regions,
       campuses,
       isSuperAdmin: isSA,
     });
