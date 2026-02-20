@@ -66,6 +66,11 @@ export const onboardingLegalSchema = z.object({
     .string()
     .min(1, "Established date is required")
     .refine((val) => !isNaN(Date.parse(val)), "Must be a valid date"),
+
+  registrationCertificate: z.string().optional().or(z.literal("")),
+  registrationCertName: z.string().optional().or(z.literal("")),
+  ntnCertificate: z.string().optional().or(z.literal("")),
+  ntnCertName: z.string().optional().or(z.literal("")),
 });
 
 export type OnboardingLegalInput = z.input<typeof onboardingLegalSchema>;
@@ -100,6 +105,18 @@ export const onboardingContactAddressSchema = z.object({
     .max(100)
     .transform(normalizeString),
 
+  district: z
+    .string()
+    .min(2, "District is required")
+    .max(100)
+    .transform(normalizeString),
+
+  tehsil: z
+    .string()
+    .min(2, "Tehsil is required")
+    .max(100)
+    .transform(normalizeString),
+
   city: z
     .string()
     .min(2, "City is required")
@@ -121,18 +138,17 @@ export const onboardingContactAddressSchema = z.object({
 
   organizationPhone: z
     .string()
-    .min(7, "Phone number must be at least 7 characters")
-    .max(20, "Phone number must not exceed 20 characters"),
+    .min(7, "Land line number must be at least 7 characters")
+    .max(20, "Land line number must not exceed 20 characters"),
+
+  organizationMobile: z
+    .string()
+    .min(7, "Mobile number must be at least 7 characters")
+    .max(20, "Mobile number must not exceed 20 characters"),
 
   organizationWhatsApp: z
     .string()
     .max(20)
-    .optional()
-    .or(z.literal("")),
-
-  websiteUrl: z
-    .string()
-    .url("Must be a valid URL")
     .optional()
     .or(z.literal("")),
 });
@@ -144,6 +160,12 @@ export type OnboardingContactAddressData = z.output<typeof onboardingContactAddr
 
 export const onboardingBrandingSchema = z.object({
   logoUrl: z
+    .string()
+    .url("Must be a valid URL")
+    .optional()
+    .or(z.literal("")),
+
+  websiteUrl: z
     .string()
     .url("Must be a valid URL")
     .optional()

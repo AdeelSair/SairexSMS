@@ -10,12 +10,13 @@ interface OnboardingStatus {
   step: string;
   nextUrl: string;
   organizationId?: string;
+  userEmail?: string;
 }
 
 const STEPS = [
   { key: "identity", label: "Identity", path: "/onboarding/identity" },
-  { key: "legal", label: "Legal", path: "/onboarding/legal" },
-  { key: "contact-address", label: "Contact & Address", path: "/onboarding/contact-address" },
+  { key: "legal", label: "Registration", path: "/onboarding/legal" },
+  { key: "contact-address", label: "HO Address & Contacts", path: "/onboarding/contact-address" },
   { key: "branding", label: "Branding", path: "/onboarding/branding" },
   { key: "preview", label: "Preview", path: "/onboarding/preview" },
 ];
@@ -33,6 +34,7 @@ export default function OnboardingLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | undefined>();
 
   const isConfirmation = pathname === "/onboarding/confirmation";
 
@@ -42,6 +44,9 @@ export default function OnboardingLayout({
       if (result.data.step === "COMPLETED") {
         router.replace("/admin/dashboard");
         return;
+      }
+      if (result.data.userEmail) {
+        setUserEmail(result.data.userEmail);
       }
     }
     setLoading(false);
@@ -62,7 +67,7 @@ export default function OnboardingLayout({
   const currentStepIndex = getStepIndex(pathname);
 
   return (
-    <OnboardingProvider>
+    <OnboardingProvider userEmail={userEmail}>
       <div className="flex min-h-screen flex-col bg-background">
         {/* Header */}
         <header className="border-b border-border bg-card px-6 py-4">

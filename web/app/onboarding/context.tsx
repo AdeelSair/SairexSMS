@@ -16,10 +16,25 @@ import type {
 } from "@/lib/validations/onboarding";
 
 const STORAGE_KEY = "sairex-onboarding-draft";
+const VERIFIED_KEY = "sairex-onboarding-verified";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type StepKey = "identity" | "legal" | "contactAddress" | "branding";
+
+export type VerifiableField = "organizationEmail" | "organizationMobile" | "organizationWhatsApp";
+
+export interface VerifiedEntry {
+  value: string;
+  verifiedAt: string;
+  channel: string;
+}
+
+export interface VerifiedFields {
+  organizationEmail: VerifiedEntry | null;
+  organizationMobile: VerifiedEntry | null;
+  organizationWhatsApp: VerifiedEntry | null;
+}
 
 export interface OnboardingDraft {
   identity: OnboardingIdentityInput | null;
@@ -43,10 +58,13 @@ export interface CompletedOrg {
   addressLine2: string | null;
   country: string | null;
   provinceState: string | null;
+  district: string | null;
+  tehsil: string | null;
   city: string | null;
   postalCode: string | null;
   organizationEmail: string | null;
   organizationPhone: string | null;
+  organizationMobile: string | null;
   organizationWhatsApp: string | null;
   websiteUrl: string | null;
   logoUrl: string | null;
@@ -56,11 +74,15 @@ export interface CompletedOrg {
 interface OnboardingContextValue {
   draft: OnboardingDraft;
   completedOrg: CompletedOrg | null;
+  verifiedFields: VerifiedFields;
+  userEmail: string | undefined;
   ready: boolean;
   saveStep: <K extends StepKey>(step: K, value: OnboardingDraft[K]) => void;
   markValidated: (step: StepKey) => void;
   isStepValidated: (step: StepKey) => boolean;
   setCompletedOrg: (org: CompletedOrg) => void;
+  markFieldVerified: (field: VerifiableField, value: string, channel: string, verifiedAt?: string) => void;
+  isFieldVerified: (field: VerifiableField, value: string) => boolean;
   clearDraft: () => void;
 }
 
@@ -74,13 +96,20 @@ const EMPTY_DRAFT: OnboardingDraft = {
   validatedSteps: [],
 };
 
+const EMPTY_VERIFIED: VerifiedFields = {
+  organizationEmail: null,
+  organizationMobile: null,
+  organizationWhatsApp: null,
+};
+
 // ─── Context ────────────────────────────────────────────────────────────────
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 
-export function OnboardingProvider({ children }: { children: ReactNode }) {
+export function OnboardingProvider({ children, userEmail }: { children: ReactNode; userEmail?: string }) {
   const [draft, setDraft] = useState<OnboardingDraft>(EMPTY_DRAFT);
   const [completedOrg, setCompletedOrg] = useState<CompletedOrg | null>(null);
+  const [verifiedFields, setVerifiedFields] = useState<VerifiedFields>(EMPTY_VERIFIED);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -97,6 +126,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     } catch {
       /* corrupted storage — start fresh */
     }
+    try {
+      const storedV = localStorage.getItem(VERIFIED_KEY);
+      if (storedV) {
+        setVerifiedFields({ ...EMPTY_VERIFIED, ...JSON.parse(storedV) });
+      }
+    } catch {
+      /* corrupted — start fresh */
+    }
     setReady(true);
   }, []);
 
@@ -105,6 +142,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
     }
   }, [draft, ready]);
+
+  useEffect(() => {
+    if (ready) {
+      localStorage.setItem(VERIFIED_KEY, JSON.stringify(verifiedFields));
+    }
+  }, [verifiedFields, ready]);
 
   const saveStep = useCallback(
     <K extends StepKey>(step: K, value: OnboardingDraft[K]) => {
@@ -127,9 +170,29 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     [draft.validatedSteps],
   );
 
+  const markFieldVerified = useCallback(
+    (field: VerifiableField, value: string, channel: string, verifiedAt?: string) => {
+      setVerifiedFields((prev) => ({
+        ...prev,
+        [field]: { value, verifiedAt: verifiedAt ?? new Date().toISOString(), channel },
+      }));
+    },
+    [],
+  );
+
+  const isFieldVerified = useCallback(
+    (field: VerifiableField, value: string) => {
+      const entry = verifiedFields[field];
+      return !!value && !!entry && entry.value === value;
+    },
+    [verifiedFields],
+  );
+
   const clearDraft = useCallback(() => {
     setDraft(EMPTY_DRAFT);
+    setVerifiedFields(EMPTY_VERIFIED);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(VERIFIED_KEY);
   }, []);
 
   if (!ready) return null;
@@ -139,11 +202,15 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       value={{
         draft,
         completedOrg,
+        verifiedFields,
+        userEmail,
         ready,
         saveStep,
         markValidated,
         isStepValidated,
         setCompletedOrg,
+        markFieldVerified,
+        isFieldVerified,
         clearDraft,
       }}
     >

@@ -111,6 +111,12 @@ export const navigation: NavGroup[] = [
     ],
   },
   {
+    label: "System",
+    items: [
+      { label: "Job Monitor", href: "/admin/jobs", icon: "Activity" },
+    ],
+  },
+  {
     label: "Development",
     items: [
       { label: "Dev Tools", href: "/admin/dev-tools", icon: "Wrench" },

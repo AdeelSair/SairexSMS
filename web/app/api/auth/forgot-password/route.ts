@@ -1,19 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { enqueue, EMAIL_QUEUE } from "@/lib/queue";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.titan.email",
-  port: Number(process.env.SMTP_PORT || 465),
-  secure: Number(process.env.SMTP_PORT || 465) === 465,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-// POST: Request password reset (unauthenticated)
 export async function POST(request: Request) {
   try {
     const { email } = await request.json();
@@ -25,7 +14,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Always return success to prevent email enumeration
     const successMessage =
       "If an account with that email exists, a reset link has been sent.";
 
@@ -34,19 +22,16 @@ export async function POST(request: Request) {
     });
 
     if (!user || !user.isActive) {
-      // Don't reveal whether the email exists
       return NextResponse.json({ message: successMessage });
     }
 
-    // Invalidate any existing unused tokens for this user
     await prisma.passwordResetToken.updateMany({
       where: { userId: user.id, usedAt: null },
       data: { usedAt: new Date() },
     });
 
-    // Generate a secure random token
     const token = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     await prisma.passwordResetToken.create({
       data: {
@@ -56,14 +41,14 @@ export async function POST(request: Request) {
       },
     });
 
-    // Build reset URL
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
-    // Send reset email
-    try {
-      await transporter.sendMail({
-        from: `"${process.env.SMTP_FROM_NAME || "SAIREX SMS"}" <${process.env.SMTP_USER}>`,
+    await enqueue({
+      type: "EMAIL",
+      queue: EMAIL_QUEUE,
+      userId: user.id,
+      payload: {
         to: email,
         subject: "Password Reset — SAIREX SMS",
         html: `
@@ -81,11 +66,8 @@ export async function POST(request: Request) {
             </p>
           </div>
         `,
-      });
-    } catch (emailErr) {
-      console.error("Failed to send reset email:", emailErr);
-      // Still return success — don't reveal email sending failures to the client
-    }
+      },
+    });
 
     return NextResponse.json({ message: successMessage });
   } catch (error) {

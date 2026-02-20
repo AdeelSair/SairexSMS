@@ -89,13 +89,16 @@ export async function POST(request: Request) {
           addressLine2: contactAddress.addressLine2 || null,
           country: contactAddress.country,
           provinceState: contactAddress.provinceState,
+          district: contactAddress.district,
+          tehsil: contactAddress.tehsil,
           city: contactAddress.city,
           postalCode: contactAddress.postalCode || null,
           organizationEmail: contactAddress.organizationEmail,
           organizationPhone: contactAddress.organizationPhone,
+          organizationMobile: contactAddress.organizationMobile,
           organizationWhatsApp: contactAddress.organizationWhatsApp || null,
-          websiteUrl: contactAddress.websiteUrl || null,
 
+          websiteUrl: branding.websiteUrl || null,
           logoUrl: branding.logoUrl || null,
         },
       });

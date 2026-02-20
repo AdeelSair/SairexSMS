@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, requireRole, isSuperAdmin } from "@/lib/auth-guard";
 import { scopeFilter, resolveOrgId } from "@/lib/tenant";
-import { sendEmail } from "@/lib/email";
+import { enqueue, EMAIL_QUEUE } from "@/lib/queue";
 import crypto from "crypto";
 
 /**
@@ -211,24 +211,30 @@ export async function POST(request: Request) {
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const inviteUrl = `${baseUrl}/signup?invite=${token}`;
 
-    await sendEmail({
-      to: email,
-      subject: "You're invited to SAIREX SMS",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-          <h2 style="color: #1e40af;">SAIREX SMS</h2>
-          <p>You've been invited to join as <strong>${role.replace("_", " ")}</strong>.</p>
-          <p style="margin: 24px 0;">
-            <a href="${inviteUrl}" 
-               style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-              Accept Invite
-            </a>
-          </p>
-          <p style="color: #64748b; font-size: 14px;">
-            This invite expires in 7 days. If you didn't expect this, ignore this email.
-          </p>
-        </div>
-      `,
+    await enqueue({
+      type: "EMAIL",
+      queue: EMAIL_QUEUE,
+      userId: guard.id,
+      organizationId: targetOrgId,
+      payload: {
+        to: email,
+        subject: "You're invited to SAIREX SMS",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">SAIREX SMS</h2>
+            <p>You've been invited to join as <strong>${role.replace("_", " ")}</strong>.</p>
+            <p style="margin: 24px 0;">
+              <a href="${inviteUrl}" 
+                 style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                Accept Invite
+              </a>
+            </p>
+            <p style="color: #64748b; font-size: 14px;">
+              This invite expires in 7 days. If you didn't expect this, ignore this email.
+            </p>
+          </div>
+        `,
+      },
     });
 
     return NextResponse.json(

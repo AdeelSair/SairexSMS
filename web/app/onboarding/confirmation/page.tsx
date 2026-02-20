@@ -113,7 +113,7 @@ export default function OnboardingConfirmationPage() {
         {/* Legal */}
         <div className="border-y border-border px-5 py-3">
           <h3 className="text-sm font-semibold text-foreground">
-            Legal Information
+            Registration Information
           </h3>
         </div>
         <div className="grid grid-cols-1 gap-x-8 gap-y-3 px-5 py-4 sm:grid-cols-2">
@@ -132,20 +132,22 @@ export default function OnboardingConfirmationPage() {
         {/* Contact & Address */}
         <div className="border-y border-border px-5 py-3">
           <h3 className="text-sm font-semibold text-foreground">
-            Contact & HQ Address
+            HO Address & Contacts
           </h3>
         </div>
         <div className="grid grid-cols-1 gap-x-8 gap-y-3 px-5 py-4 sm:grid-cols-2">
           <Field label="Street Address" value={completedOrg.addressLine1} />
           <Field label="Address Line 2" value={completedOrg.addressLine2} />
           <Field label="Country" value={completedOrg.country} />
-          <Field label="Province / State" value={completedOrg.provinceState} />
+          <Field label="Province" value={completedOrg.provinceState} />
+          <Field label="District" value={completedOrg.district} />
+          <Field label="Tehsil" value={completedOrg.tehsil} />
           <Field label="City" value={completedOrg.city} />
           <Field label="Postal Code" value={completedOrg.postalCode} />
-          <Field label="Email" value={completedOrg.organizationEmail} />
-          <Field label="Phone" value={completedOrg.organizationPhone} />
+          <Field label="Official Email" value={completedOrg.organizationEmail} />
+          <Field label="Land Line Number" value={completedOrg.organizationPhone} />
+          <Field label="Mobile Number" value={completedOrg.organizationMobile} />
           <Field label="WhatsApp" value={completedOrg.organizationWhatsApp} />
-          <Field label="Website" value={completedOrg.websiteUrl} />
         </div>
 
         {/* Branding */}
@@ -153,6 +155,7 @@ export default function OnboardingConfirmationPage() {
           <h3 className="text-sm font-semibold text-foreground">Branding</h3>
         </div>
         <div className="grid grid-cols-1 gap-x-8 gap-y-3 px-5 py-4 sm:grid-cols-2">
+          <Field label="Website" value={completedOrg.websiteUrl} />
           <Field label="Logo URL" value={completedOrg.logoUrl} />
         </div>
 

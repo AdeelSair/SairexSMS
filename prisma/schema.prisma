@@ -7,6 +7,7 @@ generator client {
 
 generator jsClient {
   provider = "prisma-client-js"
+  output   = "../web/lib/generated/prisma"
 }
 
 datasource db {
@@ -99,6 +100,30 @@ model User {
   createdOrgs        Organization[]     @relation("OrgCreator")
   sentInvitations    Invitation[]
   resetTokens        PasswordResetToken[]
+  verificationCodes  VerificationCode[]
+  jobs               Job[]
+}
+
+////////////////////////////////////////////////////////////
+/// ONBOARDING VERIFICATION CODES
+////////////////////////////////////////////////////////////
+
+model VerificationCode {
+  id           String    @id @default(cuid())
+  userId       Int
+  channel      String    // "email" | "mobile" | "whatsapp"
+  target       String    // email address or phone number
+  codeHash     String    // SHA-256 hex digest of the 6-digit OTP
+  expiresAt    DateTime
+  verified     Boolean   @default(false)
+  verifiedAt   DateTime?
+  attempts     Int       @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, channel, target])
 }
 
 ////////////////////////////////////////////////////////////
@@ -143,12 +168,15 @@ model Organization {
   addressLine2     String?
   country          String?
   provinceState    String?
+  district         String?
+  tehsil           String?
   city             String?
   postalCode       String?
 
   /// Contact (Step 3: CONTACT_ADDRESS — nullable until filled)
   organizationEmail     String?
   organizationPhone     String?
+  organizationMobile    String?
   organizationWhatsApp  String?
   websiteUrl            String?
 
@@ -158,6 +186,7 @@ model Organization {
   // Relations
   memberships       Membership[]
   invitations       Invitation[]
+  jobs              Job[]
 
   contacts          OrganizationContact[]
   addresses         OrganizationAddress[]
@@ -436,4 +465,39 @@ model FeeChallan {
   paidAt         DateTime?
 
   generatedBy    String
+}
+
+////////////////////////////////////////////////////////////
+/// BACKGROUND JOB (Queue Audit Trail)
+////////////////////////////////////////////////////////////
+
+model Job {
+  id             String    @id @default(cuid())
+  type           String    // EMAIL, SMS, WHATSAPP, CHALLAN_PDF, REPORT, IMPORT, OTP
+  queue          String    @default("default")
+  payload        Json
+  status         String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, DEAD
+  priority       Int       @default(0)
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  scheduledAt    DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  failedAt       DateTime?
+  error          String?
+  result         Json?
+
+  organizationId String?   @db.VarChar(11)
+  userId         Int?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  user           User?         @relation(fields: [userId], references: [id])
+
+  @@index([status, scheduledAt])
+  @@index([type, status])
+  @@index([organizationId])
+  @@index([queue, priority])
 }

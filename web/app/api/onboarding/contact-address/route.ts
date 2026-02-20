@@ -52,6 +52,8 @@ export async function POST(request: Request) {
         addressLine2: parsed.data.addressLine2 || null,
         country: parsed.data.country,
         provinceState: parsed.data.provinceState,
+        district: parsed.data.district,
+        tehsil: parsed.data.tehsil,
         city: parsed.data.city,
         postalCode: parsed.data.postalCode || null,
         organizationEmail: parsed.data.organizationEmail,

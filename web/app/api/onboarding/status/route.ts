@@ -43,7 +43,7 @@ export async function GET() {
 
     if (!membership) {
       return NextResponse.json(
-        { step: "NO_ORG", nextUrl: "/onboarding/identity" },
+        { step: "NO_ORG", nextUrl: "/onboarding/identity", userEmail: user.email },
       );
     }
 

@@ -4,7 +4,12 @@ import { notifyParent } from "@/lib/notifications";
 import { requireAuth, requireRole } from "@/lib/auth-guard";
 import { scopeFilter } from "@/lib/tenant";
 
-// GET: Send fee reminders for challans due in 3 days (SUPER_ADMIN or ORG_ADMIN only)
+/**
+ * GET /api/cron/reminders
+ *
+ * Finds all UNPAID challans due in 3 days and enqueues a NOTIFICATION
+ * job for each. Returns immediately — actual delivery is async.
+ */
 export async function GET() {
   const guard = await requireAuth();
   if (guard instanceof NextResponse) return guard;
@@ -21,14 +26,10 @@ export async function GET() {
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // Tenant-scoped: only send reminders for the user's org (SUPER_ADMIN sees all)
-    const where: any = {
+    const where = {
       ...scopeFilter(guard, { hasCampus: true }),
       status: "UNPAID",
-      dueDate: {
-        gte: startOfDay,
-        lte: endOfDay,
-      },
+      dueDate: { gte: startOfDay, lte: endOfDay },
     };
 
     const pendingChallans = await prisma.feeChallan.findMany({
@@ -36,40 +37,22 @@ export async function GET() {
       include: { student: true },
     });
 
-    const summary = {
-      totalChallans: pendingChallans.length,
-      fullyNotified: 0,
-      email: { sent: 0, failed: 0 },
-      sms: { sent: 0, failed: 0 },
-      whatsapp: { sent: 0, failed: 0 },
-    };
+    const jobIds: string[] = [];
 
     for (const challan of pendingChallans) {
-      const result = await notifyParent(challan.student, challan, "REMINDER");
-
-      if (result.email.sent) summary.email.sent += 1;
-      else summary.email.failed += 1;
-
-      if (result.sms.sent) summary.sms.sent += 1;
-      else summary.sms.failed += 1;
-
-      if (result.whatsapp.sent) summary.whatsapp.sent += 1;
-      else summary.whatsapp.failed += 1;
-
-      if (result.email.sent && result.sms.sent && result.whatsapp.sent) {
-        summary.fullyNotified += 1;
-      }
+      const jobId = await notifyParent(challan.student, challan, "REMINDER");
+      jobIds.push(jobId);
     }
 
     return NextResponse.json({
-      message: "Reminders sent",
-      remindersCount: pendingChallans.length,
-      summary,
+      message: `Enqueued ${jobIds.length} reminder notification(s)`,
+      count: jobIds.length,
+      jobIds,
     });
   } catch (error) {
     console.error("Cron reminder error:", error);
     return NextResponse.json(
-      { error: "Failed to send reminders" },
+      { error: "Failed to enqueue reminders" },
       { status: 500 }
     );
   }

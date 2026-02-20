@@ -31,6 +31,7 @@ export default function OnboardingBrandingPage() {
     resolver: zodResolver(onboardingBrandingSchema),
     defaultValues: draft.branding ?? {
       logoUrl: "",
+      websiteUrl: "",
     },
   });
 
@@ -69,6 +70,23 @@ export default function OnboardingBrandingPage() {
         <form className="space-y-5">
           <FormField
             control={form.control}
+            name="websiteUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Website (Optional)</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="https://school.edu.pk"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="logoUrl"
             render={({ field }) => (
               <FormItem>
@@ -85,8 +103,7 @@ export default function OnboardingBrandingPage() {
           />
 
           <p className="text-xs text-muted-foreground">
-            Paste a direct link to your logo image. You can update this anytime
-            from your organization settings.
+            You can update these anytime from your organization settings.
           </p>
 
           {/* ── Actions ── */}

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Pencil } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Pencil, FileText } from "lucide-react";
 
 import { api } from "@/lib/api-client";
 import { useOnboarding, type CompletedOrg } from "../context";
@@ -136,12 +136,34 @@ export default function OnboardingPreviewPage() {
       </Section>
 
       {/* ── Legal ── */}
-      <Section title="Legal Information" editPath="/onboarding/legal">
+      <Section title="Registration Information" editPath="/onboarding/legal">
         {legal ? (
           <>
             <Field label="Registration Number" value={legal.registrationNumber} />
             <Field label="Tax / NTN Number" value={legal.taxNumber} />
             <Field label="Established Date" value={legal.establishedDate} />
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">Registration Certificate</dt>
+              <dd className="mt-0.5 text-sm text-foreground">
+                {legal.registrationCertName ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <FileText size={14} className="text-primary" />
+                    {legal.registrationCertName}
+                  </span>
+                ) : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">NTN Certificate</dt>
+              <dd className="mt-0.5 text-sm text-foreground">
+                {legal.ntnCertName ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <FileText size={14} className="text-primary" />
+                    {legal.ntnCertName}
+                  </span>
+                ) : "—"}
+              </dd>
+            </div>
           </>
         ) : (
           <p className="col-span-2 text-sm text-destructive">Not completed yet</p>
@@ -149,19 +171,21 @@ export default function OnboardingPreviewPage() {
       </Section>
 
       {/* ── Contact & Address ── */}
-      <Section title="Contact & HQ Address" editPath="/onboarding/contact-address">
+      <Section title="HO Address & Contacts" editPath="/onboarding/contact-address">
         {contactAddress ? (
           <>
             <Field label="Street Address" value={contactAddress.addressLine1} />
             <Field label="Address Line 2" value={contactAddress.addressLine2} />
             <Field label="Country" value={contactAddress.country} />
-            <Field label="Province / State" value={contactAddress.provinceState} />
+            <Field label="Province" value={contactAddress.provinceState} />
+            <Field label="District" value={contactAddress.district} />
+            <Field label="Tehsil" value={contactAddress.tehsil} />
             <Field label="City" value={contactAddress.city} />
             <Field label="Postal Code" value={contactAddress.postalCode} />
-            <Field label="Email" value={contactAddress.organizationEmail} />
-            <Field label="Phone" value={contactAddress.organizationPhone} />
+            <Field label="Official Email" value={contactAddress.organizationEmail} />
+            <Field label="Land Line Number" value={contactAddress.organizationPhone} />
+            <Field label="Mobile Number" value={contactAddress.organizationMobile} />
             <Field label="WhatsApp" value={contactAddress.organizationWhatsApp} />
-            <Field label="Website" value={contactAddress.websiteUrl} />
           </>
         ) : (
           <p className="col-span-2 text-sm text-destructive">Not completed yet</p>
@@ -170,6 +194,7 @@ export default function OnboardingPreviewPage() {
 
       {/* ── Branding ── */}
       <Section title="Branding" editPath="/onboarding/branding">
+        <Field label="Website" value={branding?.websiteUrl} />
         <Field label="Logo URL" value={branding?.logoUrl} />
       </Section>
 

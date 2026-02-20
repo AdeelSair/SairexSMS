@@ -10,7 +10,7 @@ const PAKISTAN_PROVINCES = [
   "Sindh",
   "KPK",
   "Balochistan",
-  "Islamabad Capital Territory",
+  "Capital Territory",
   "Gilgit-Baltistan",
   "AJK",
 ] as const;
