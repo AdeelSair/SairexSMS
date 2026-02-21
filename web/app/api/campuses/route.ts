@@ -79,11 +79,14 @@ export async function POST(request: Request) {
         tx,
       );
 
+      const campusCode = `${orgId}-${fullUnitPath}`;
+      const campusSlug = campusCode.toLowerCase();
+
       return tx.campus.create({
         data: {
           name: body.name,
-          campusCode: body.campusCode,
-          campusSlug: body.campusCode.toLowerCase(),
+          campusCode,
+          campusSlug,
           unitCode,
           fullUnitPath,
           organizationId: orgId,

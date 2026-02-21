@@ -10,7 +10,7 @@ export interface SmsJobData {
 
 async function processSmsJob(bull: BullJob<SmsJobData>): Promise<void> {
   const { prisma } = await import("@/lib/prisma");
-  const axios = (await import("axios")).default;
+  const { sendSmsMessage } = await import("@/lib/sms");
 
   const { jobId, to, message } = bull.data;
 
@@ -20,15 +20,7 @@ async function processSmsJob(bull: BullJob<SmsJobData>): Promise<void> {
   });
 
   try {
-    const hash = process.env.VEEVO_HASH;
-    const sender = process.env.VEEVO_SENDER;
-
-    if (!hash || !sender) {
-      console.log(`[SMS Worker] DEV MODE — SMS → ${to}: ${message}`);
-    } else {
-      const url = `https://api.veevotech.com/sendsms?hash=${hash}&receivenum=${to}&sendernum=${sender}&textmessage=${encodeURIComponent(message)}`;
-      await axios.get(url);
-    }
+    await sendSmsMessage(to, message);
 
     await prisma.job.update({
       where: { id: jobId },

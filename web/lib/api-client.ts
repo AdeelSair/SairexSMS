@@ -38,9 +38,14 @@ async function request<T>(
   const url = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
   try {
+    const isFormData = options.body instanceof FormData;
+    const defaultHeaders: HeadersInit = isFormData
+      ? {}
+      : { "Content-Type": "application/json" };
+
     const res = await fetch(url, {
       headers: {
-        "Content-Type": "application/json",
+        ...defaultHeaders,
         ...options.headers,
       },
       ...options,
@@ -111,6 +116,15 @@ export const api = {
     return request<T>(endpoint, {
       method: "DELETE",
       body: body != null ? JSON.stringify(body) : undefined,
+    });
+  },
+
+  /** Upload FormData (multipart). Browser sets Content-Type boundary automatically. */
+  upload<T>(endpoint: string, formData: FormData) {
+    return request<T>(endpoint, {
+      method: "POST",
+      headers: {},
+      body: formData,
     });
   },
 } as const;

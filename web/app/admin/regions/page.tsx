@@ -136,7 +136,7 @@ const cityColumns = (regions: GeoRegion[], subRegions: GeoSubRegion[]): SxColumn
   },
 ];
 
-const zoneColumns = (cities: GeoCity[]): SxColumn<GeoZone>[] => [
+const zoneColumns = (cities: GeoCity[], subRegions: GeoSubRegion[], regions: GeoRegion[]): SxColumn<GeoZone>[] => [
   { key: "unitCode", header: "Code", render: (r) => <span className="font-data font-medium text-primary">{r.unitCode}</span> },
   { key: "name", header: "Zone Name", render: (r) => <span className="font-medium">{r.name}</span> },
   {
@@ -145,6 +145,24 @@ const zoneColumns = (cities: GeoCity[]): SxColumn<GeoZone>[] => [
     render: (r) => {
       const parent = cities.find((c) => c.id === r.cityId);
       return parent ? <span>{parent.unitCode} — {parent.name}</span> : <span className="text-xs text-muted-foreground italic">—</span>;
+    },
+  },
+  {
+    key: "subRegionId" as keyof GeoZone,
+    header: "Sub-Region",
+    render: (r) => {
+      const city = cities.find((c) => c.id === r.cityId);
+      const sr = city?.subRegionId ? subRegions.find((s) => s.id === city.subRegionId) : null;
+      return sr ? <span>{sr.unitCode} — {sr.name}</span> : <span className="text-xs text-muted-foreground italic">—</span>;
+    },
+  },
+  {
+    key: "regionId" as keyof GeoZone,
+    header: "Region",
+    render: (r) => {
+      const city = cities.find((c) => c.id === r.cityId);
+      const reg = city?.regionId ? regions.find((rg) => rg.id === city.regionId) : null;
+      return reg ? <SxStatusBadge variant="info">{reg.unitCode} — {reg.name}</SxStatusBadge> : <span className="text-xs text-muted-foreground italic">—</span>;
     },
   },
 ];
@@ -313,7 +331,7 @@ export default function GeoHierarchyPage() {
             </SxButton>
           </div>
           <SxDataTable
-            columns={zoneColumns(cities) as unknown as SxColumn<Record<string, unknown>>[]}
+            columns={zoneColumns(cities, subRegions, regions) as unknown as SxColumn<Record<string, unknown>>[]}
             data={zones as unknown as Record<string, unknown>[]}
             loading={loading}
             emptyMessage="No zones defined yet."
@@ -396,7 +414,7 @@ export default function GeoHierarchyPage() {
               <FormField control={cityForm.control} name="regionId" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Region (optional)</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select value={field.value} onValueChange={(v) => { field.onChange(v); cityForm.setValue("subRegionId", ""); }}>
                     <FormControl><SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
@@ -406,19 +424,25 @@ export default function GeoHierarchyPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={cityForm.control} name="subRegionId" render={({ field }) => (
+              <FormField control={cityForm.control} name="subRegionId" render={({ field }) => {
+                const selectedRegionId = cityForm.watch("regionId");
+                const filteredSubRegions = selectedRegionId && selectedRegionId !== "none"
+                  ? subRegions.filter((sr) => sr.regionId === selectedRegionId)
+                  : subRegions;
+                return (
                 <FormItem>
                   <FormLabel>Sub-Region (optional)</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl><SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {subRegions.map((sr) => <SelectItem key={sr.id} value={sr.id}>{sr.name}</SelectItem>)}
+                      {filteredSubRegions.map((sr) => <SelectItem key={sr.id} value={sr.id}>{sr.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
-              )} />
+                );
+              }} />
               <FormField control={cityForm.control} name="name" render={({ field }) => (
                 <FormItem>
                   <FormLabel>City Name</FormLabel>

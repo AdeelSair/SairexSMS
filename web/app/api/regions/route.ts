@@ -49,32 +49,48 @@ export async function POST(request: Request) {
       );
     }
 
+    const trimmedName = name.trim();
+
     switch (type) {
       case "region": {
+        const existing = await prisma.region.findFirst({ where: { name: { equals: trimmedName, mode: "insensitive" } } });
+        if (existing) {
+          return NextResponse.json({ error: `Region "${trimmedName}" already exists` }, { status: 409 });
+        }
         const region = await prisma.$transaction(async (tx) => {
           const unitCode = await generateUnitCode("REGION", null, tx);
-          return tx.region.create({ data: { name, unitCode } });
+          return tx.region.create({ data: { name: trimmedName, unitCode } });
         });
         return NextResponse.json(region, { status: 201 });
       }
 
       case "subRegion": {
         const parentId = body.regionId || null;
+        const existing = await prisma.subRegion.findFirst({
+          where: { name: { equals: trimmedName, mode: "insensitive" }, regionId: parentId },
+        });
+        if (existing) {
+          return NextResponse.json({ error: `Sub-region "${trimmedName}" already exists under this region` }, { status: 409 });
+        }
         const subRegion = await prisma.$transaction(async (tx) => {
           const unitCode = await generateUnitCode("SUBREGION", parentId, tx);
           return tx.subRegion.create({
-            data: { name, unitCode, regionId: parentId },
+            data: { name: trimmedName, unitCode, regionId: parentId },
           });
         });
         return NextResponse.json(subRegion, { status: 201 });
       }
 
       case "city": {
+        const existing = await prisma.city.findFirst({ where: { name: { equals: trimmedName, mode: "insensitive" } } });
+        if (existing) {
+          return NextResponse.json({ error: `City "${trimmedName}" already exists` }, { status: 409 });
+        }
         const city = await prisma.$transaction(async (tx) => {
-          const unitCode = await generateCityCode(name, tx);
+          const unitCode = await generateCityCode(trimmedName, tx);
           return tx.city.create({
             data: {
-              name,
+              name: trimmedName,
               unitCode,
               regionId: body.regionId || null,
               subRegionId: body.subRegionId || null,
@@ -91,10 +107,16 @@ export async function POST(request: Request) {
             { status: 400 },
           );
         }
+        const existing = await prisma.zone.findFirst({
+          where: { name: { equals: trimmedName, mode: "insensitive" }, cityId: body.cityId },
+        });
+        if (existing) {
+          return NextResponse.json({ error: `Zone "${trimmedName}" already exists in this city` }, { status: 409 });
+        }
         const zone = await prisma.$transaction(async (tx) => {
           const unitCode = await generateUnitCode("ZONE", body.cityId, tx);
           return tx.zone.create({
-            data: { name, unitCode, cityId: body.cityId },
+            data: { name: trimmedName, unitCode, cityId: body.cityId },
           });
         });
         return NextResponse.json(zone, { status: 201 });

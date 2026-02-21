@@ -77,7 +77,6 @@ interface Campus {
 
 const campusSchema = z.object({
   name: z.string().min(1, "Campus name is required"),
-  campusCode: z.string().min(1, "Campus code is required"),
   organizationId: z.string().min(1, "Organization is required"),
   cityId: z.string().min(1, "City is required"),
   zoneId: z.string().optional(),
@@ -172,7 +171,7 @@ export default function CampusesPage() {
 
   const form = useForm<CampusFormValues>({
     resolver: zodResolver(campusSchema),
-    defaultValues: { name: "", campusCode: "", organizationId: "", cityId: "", zoneId: "" },
+    defaultValues: { name: "", organizationId: "", cityId: "", zoneId: "" },
   });
 
   const { handleSubmit, reset, watch, formState: { isSubmitting } } = form;
@@ -253,22 +252,13 @@ export default function CampusesPage() {
                 </FormItem>
               )} />
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField control={form.control} name="name" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Campus Name</FormLabel>
-                    <FormControl><Input placeholder="e.g. Islamabad Campus" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="campusCode" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Campus Code</FormLabel>
-                    <FormControl><Input placeholder="e.g. ISB-01" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
+              <FormField control={form.control} name="name" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Campus Name</FormLabel>
+                  <FormControl><Input placeholder="e.g. Islamabad Campus" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField control={form.control} name="cityId" render={({ field }) => (

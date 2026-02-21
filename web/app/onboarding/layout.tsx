@@ -41,7 +41,7 @@ export default function OnboardingLayout({
   const checkStatus = useCallback(async () => {
     const result = await api.get<OnboardingStatus>("/api/onboarding/status");
     if (result.ok) {
-      if (result.data.step === "COMPLETED") {
+      if (result.data.step === "COMPLETED" && !isConfirmation) {
         router.replace("/admin/dashboard");
         return;
       }
@@ -50,7 +50,7 @@ export default function OnboardingLayout({
       }
     }
     setLoading(false);
-  }, [router]);
+  }, [router, isConfirmation]);
 
   useEffect(() => {
     checkStatus();

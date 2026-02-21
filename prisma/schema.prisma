@@ -82,6 +82,21 @@ enum UnitScopeType {
   CAMPUS
 }
 
+enum MediaType {
+  LOGO
+  FAVICON
+  DOCUMENT
+}
+
+enum MediaVariant {
+  ORIGINAL
+  SM
+  MD
+  LG
+  DARK
+  PRINT
+}
+
 ////////////////////////////////////////////////////////////
 /// USER (GLOBAL IDENTITY)
 ////////////////////////////////////////////////////////////
@@ -190,9 +205,15 @@ model Organization {
 
   /// Branding (Step 4: BRANDING — always optional)
   logoUrl          String?
+  logoKey          String?
+  logoUpdatedAt    DateTime?
+  logoLightUrl     String?
+  logoDarkUrl      String?
+  logoPrintUrl     String?
 
   // Relations
   memberships       Membership[]
+  mediaAssets       MediaAsset[]
   invitations       Invitation[]
   jobs              Job[]
 
@@ -562,4 +583,30 @@ model Job {
   @@index([type, status])
   @@index([organizationId])
   @@index([queue, priority])
+}
+
+////////////////////////////////////////////////////////////
+/// MEDIA ASSETS
+////////////////////////////////////////////////////////////
+
+model MediaAsset {
+  id             String       @id @default(cuid())
+  organizationId String       @db.VarChar(11)
+  type           MediaType
+  variant        MediaVariant @default(ORIGINAL)
+  url            String
+  key            String
+  size           Int
+  mimeType       String
+  width          Int?
+  height         Int?
+  originalName   String?
+  createdBy      String?
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, type])
+  @@index([organizationId, type, variant])
 }

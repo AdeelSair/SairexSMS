@@ -39,31 +39,32 @@ async function processOtpJob(bull: BullJob<OtpJobData>): Promise<void> {
         `,
       });
     } else if (channel === "mobile") {
-      const hash = process.env.VEEVO_HASH;
-      const sender = process.env.VEEVO_SENDER;
-
-      if (!hash || !sender) {
-        console.log(`[OTP Worker] DEV MODE — SMS → ${target}: ${code}`);
-        success = true;
-      } else {
-        const axios = (await import("axios")).default;
+      const { sendSmsMessage } = await import("@/lib/sms");
+      try {
         const msg = `Your SAIREX SMS verification code is: ${code}. Valid for 10 minutes.`;
-        const url = `https://api.veevotech.com/sendsms?hash=${hash}&receivenum=${encodeURIComponent(target)}&sendernum=${encodeURIComponent(sender)}&textmessage=${encodeURIComponent(msg)}`;
-        const res = await axios.get(url);
-        success = res.status === 200;
+        await sendSmsMessage(target, msg);
+        success = true;
+      } catch (smsErr) {
+        const errMsg = smsErr instanceof Error ? smsErr.message : "";
+        if (errMsg.includes("VEEVO_HASH") || errMsg.includes("VEEVO_SENDER")) {
+          console.log(`[OTP Worker] DEV MODE — SMS → ${target}: ${code}`);
+          success = true;
+        } else {
+          throw smsErr;
+        }
       }
     } else if (channel === "whatsapp") {
-      const { sendWhatsAppMessage } = await import("@/lib/whatsapp");
       try {
+        const { sendWhatsAppMessage } = await import("@/lib/whatsapp");
         await sendWhatsAppMessage(target, `Your SAIREX SMS verification code is: ${code}`);
         success = true;
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Unknown WhatsApp error";
-        if (errorMsg.includes("init") || errorMsg.includes("not ready")) {
+      } catch (waErr) {
+        const errMsg = waErr instanceof Error ? waErr.message : "";
+        if (errMsg.includes("init") || errMsg.includes("not ready") || errMsg.includes("Chrome") || errMsg.includes("puppeteer")) {
           console.log(`[OTP Worker] DEV MODE — WhatsApp → ${target}: ${code}`);
           success = true;
         } else {
-          throw err;
+          throw waErr;
         }
       }
     }

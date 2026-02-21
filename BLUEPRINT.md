@@ -78,6 +78,7 @@
 | SMS | Axios → Veevo Tech API | SMS delivery |
 | WhatsApp | whatsapp-web.js (Puppeteer) | WhatsApp messaging |
 | PDF | PDFKit (server) + jsPDF/html2canvas (client) | Challan & report PDFs |
+| File Storage | AWS S3 + sharp (WEBP optimization) | Logo & media asset upload with variants |
 
 ### Forms & Validation
 
@@ -874,6 +875,107 @@ Rate limited: 1 message per 2 seconds.
 | `REDIS_URL` | Redis connection (default: `redis://127.0.0.1:6379`) |
 | `VEEVO_HASH` | Veevo Tech SMS API key |
 | `VEEVO_SENDER` | SMS sender number |
+| `AWS_REGION` | AWS S3 region for media storage |
+| `AWS_ACCESS_KEY_ID` | AWS IAM access key |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret key |
+| `AWS_S3_BUCKET` | S3 bucket name for assets |
+| `NEXT_PUBLIC_CDN_URL` | CDN base URL for serving uploaded assets |
+
+---
+
+## 16a. Enterprise Media Asset System
+
+### Overview
+
+SAIREX uses AWS S3 with server-side image processing (sharp) for all media uploads.
+Uploads are validated, optimized to WEBP, and stored as versioned variants (SM/MD/LG).
+
+### Architecture
+
+```
+Browser (FormData) → POST /api/media/logo/upload
+  → Validate (dimensions, format, size)
+  → Generate WEBP variants (SM 64px, MD 128px, LG 256px, ORIGINAL)
+  → Upload all to S3
+  → Delete previous version from S3
+  → Save MediaAsset rows (versioned)
+  → Update Organization branding fields
+  → Return variant URLs to browser
+```
+
+### Models
+
+- **`MediaAsset`** — versioned audit table per uploaded file
+  - Fields: `type`, `variant`, `url`, `key`, `size`, `mimeType`, `width`, `height`, `version`, `createdBy`
+- **`Organization`** branding fields:
+  - `logoUrl` — primary logo URL (MD variant)
+  - `logoKey` — S3 key for deletion
+  - `logoUpdatedAt` — cache-busting timestamp
+  - `logoLightUrl` — light theme logo
+  - `logoDarkUrl` — dark theme logo
+  - `logoPrintUrl` — print/report logo
+
+### `MediaType` Enum
+
+| Value | Usage |
+|-------|-------|
+| `LOGO` | Organization logo |
+| `FAVICON` | Browser favicon |
+| `DOCUMENT` | Registration certificates, NTN, etc. |
+
+### `MediaVariant` Enum
+
+| Value | Size | Usage |
+|-------|------|-------|
+| `ORIGINAL` | Full size (WEBP) | Archive / high-res |
+| `SM` | 64px | Sidebar, tiny icons |
+| `MD` | 128px | Header, cards |
+| `LG` | 256px | Reports, challans |
+| `DARK` | — | Dark theme (future) |
+| `PRINT` | — | Print output (future) |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/s3.ts` | Shared S3 client singleton |
+| `lib/media/validate-image.ts` | Validates dimensions (128–4096), format, size (5 MB) |
+| `lib/media/generate-variants.ts` | Generates SM/MD/LG WEBP variants via sharp |
+| `lib/media/delete-file.ts` | Safe S3 object/prefix deletion |
+| `lib/media/index.ts` | Barrel export |
+| `app/api/media/logo/upload/route.ts` | Enterprise upload endpoint (FormData → validate → optimize → S3 → save) |
+| `app/api/media/logo/upload-url/route.ts` | Legacy pre-signed URL endpoint |
+| `app/api/media/logo/save/route.ts` | Legacy save endpoint |
+| `app/api/media/logo/rollback/route.ts` | Rollback to previous logo version |
+| `app/onboarding/branding/page.tsx` | Drag-and-drop upload UI with variant preview |
+
+### Versioning
+
+Files are never overwritten. Each upload increments the version:
+```
+organizations/{orgId}/branding/logo_v1_original.webp
+organizations/{orgId}/branding/logo_v1_sm.webp
+organizations/{orgId}/branding/logo_v2_original.webp  ← new version
+```
+
+Previous version S3 objects are deleted on new upload. MediaAsset rows are kept for audit.
+
+### Rollback
+
+`POST /api/media/logo/rollback` with `{ version: N }` — restores Organization branding fields from a previous MediaAsset version.
+
+### Constraints
+
+- Accepted types: PNG, JPG, WEBP, SVG
+- Min dimensions: 128×128
+- Max dimensions: 4096×4096
+- Max file size: 5 MB
+- Output format: WEBP (quality 85–90)
+
+### API Client
+
+`api.upload<T>(endpoint, formData)` method added to `lib/api-client.ts` for multipart uploads.
+Skips `Content-Type: application/json` header so browser sets multipart boundary automatically.
 
 ---
 
