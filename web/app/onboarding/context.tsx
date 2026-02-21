@@ -69,6 +69,11 @@ export interface CompletedOrg {
   websiteUrl: string | null;
   logoUrl: string | null;
   createdAt: string;
+  membership?: {
+    id: number;
+    role: string;
+    organizationId: string;
+  };
 }
 
 interface OnboardingContextValue {

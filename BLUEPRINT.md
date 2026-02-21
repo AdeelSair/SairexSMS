@@ -77,7 +77,7 @@
 | Email | Nodemailer → Titan Email SMTP | Transactional email |
 | SMS | Axios → Veevo Tech API | SMS delivery |
 | WhatsApp | whatsapp-web.js (Puppeteer) | WhatsApp messaging |
-| PDF | PDFKit (server) + jsPDF/html2canvas (client) | Challan & report PDFs |
+| PDF | @react-pdf/renderer (certificates) + PDFKit (challans) | Registration certificates, challans, reports |
 | File Storage | AWS S3 + sharp (WEBP optimization) | Logo & media asset upload with variants |
 
 ### Forms & Validation
@@ -976,6 +976,52 @@ Previous version S3 objects are deleted on new upload. MediaAsset rows are kept 
 
 `api.upload<T>(endpoint, formData)` method added to `lib/api-client.ts` for multipart uploads.
 Skips `Content-Type: application/json` header so browser sets multipart boundary automatically.
+
+---
+
+## 16b. Registration Certificate PDF System
+
+### Overview
+
+Server-generated, 2-page landscape PDF using `@react-pdf/renderer`. Always rendered from database (source of truth), not client-side HTML snapshots.
+
+### Architecture
+
+```
+Browser → GET /api/onboarding/certificate?orgId=ORG-00002
+  → Auth check (session + membership or SUPER_ADMIN)
+  → Fetch Organization from DB
+  → Render React PDF → Stream buffer → Browser displays inline
+```
+
+### Pages
+
+| Page | Content | Layout |
+|------|---------|--------|
+| **Page 1** | Registration Certificate — gold borders, centered title, org name, ID, date, system stamp | Landscape A4, formal |
+| **Page 2** | Organization Profile — two-column layout: Basic Info + Contact (left), Address + Compliance (right) | Landscape A4, structured |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/pdf/styles.ts` | Shared StyleSheet definitions (certificate + profile) |
+| `lib/pdf/RegistrationPDF.tsx` | React PDF Document component (2 pages) |
+| `app/api/onboarding/certificate/route.tsx` | API route — auth, DB fetch, render, stream |
+| `app/onboarding/confirmation/page.tsx` | Confirmation page with embedded PDF viewer |
+
+### Features
+
+- PDF rendered server-side from `@react-pdf/renderer` (not jspdf/html2canvas)
+- QR verification code on Page 1 (points to `sms.sairex.edu.pk/verify/{certNo}`)
+- Certificate number: `SRC-{year}-{sequence}` (e.g., `SRC-2026-000002`)
+- System seal (gold circular "Sairex SMS Verified")
+- Gold double-border frame + "SAIREX" watermark
+- Embedded PDF preview via `<iframe>`
+- Print button opens PDF in new window for native browser print
+- Download button triggers file save as `{OrgID}.pdf`
+- Multi-tenant safe: membership + SUPER_ADMIN check
+- Filename: `{OrgID}.pdf`
 
 ---
 

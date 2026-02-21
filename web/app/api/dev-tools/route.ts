@@ -52,6 +52,7 @@ export async function GET() {
       isActive: u.isActive,
       emailVerified: !!u.emailVerifiedAt,
       platformRole: u.platformRole,
+      membershipRole: u.memberships[0]?.role ?? null,
       organizationId: u.memberships[0]?.organization?.id ?? null,
       organizationName: u.memberships[0]?.organization?.organizationName ?? null,
       createdAt: u.createdAt.toISOString(),

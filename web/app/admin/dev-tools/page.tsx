@@ -47,6 +47,7 @@ interface FullUser {
   isActive: boolean;
   emailVerified: boolean;
   platformRole: string | null;
+  membershipRole: string | null;
   organizationId: string | null;
   organizationName: string | null;
   createdAt: string;
@@ -159,13 +160,16 @@ const allUserColumns = (
   },
   {
     key: "platformRole",
-    header: "Platform Role",
-    render: (r) =>
-      r.platformRole ? (
-        <SxStatusBadge variant="info">{humanize(r.platformRole)}</SxStatusBadge>
-      ) : (
-        <span className="text-xs text-muted-foreground">—</span>
-      ),
+    header: "Role",
+    render: (r) => {
+      if (r.platformRole) {
+        return <SxStatusBadge variant="info">{humanize(r.platformRole)}</SxStatusBadge>;
+      }
+      if (r.membershipRole) {
+        return <SxStatusBadge variant="success">{humanize(r.membershipRole)}</SxStatusBadge>;
+      }
+      return <span className="text-xs text-muted-foreground">—</span>;
+    },
   },
   {
     key: "organizationName",

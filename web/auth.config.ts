@@ -21,7 +21,7 @@ export const authConfig = {
 
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = (user as Record<string, unknown>).id;
         token.platformRole = (user as Record<string, unknown>).platformRole ?? null;
@@ -30,6 +30,15 @@ export const authConfig = {
         token.campusId = (user as Record<string, unknown>).campusId ?? null;
         token.membershipId = (user as Record<string, unknown>).membershipId ?? null;
       }
+
+      if (trigger === "update" && session) {
+        const s = session as Record<string, unknown>;
+        if (s.role !== undefined) token.role = s.role;
+        if (s.organizationId !== undefined) token.organizationId = s.organizationId;
+        if (s.campusId !== undefined) token.campusId = s.campusId;
+        if (s.membershipId !== undefined) token.membershipId = s.membershipId;
+      }
+
       return token;
     },
     async session({ session, token }) {

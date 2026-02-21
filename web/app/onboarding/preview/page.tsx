@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, Pencil, FileText, ScrollText } from "lucide-react";
 
@@ -59,6 +60,7 @@ function Field({ label, value }: { label: string; value: string | undefined | nu
 
 export default function OnboardingPreviewPage() {
   const router = useRouter();
+  const { update: updateSession } = useSession();
   const { draft, setCompletedOrg, clearDraft } = useOnboarding();
   const [submitting, setSubmitting] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -101,6 +103,15 @@ export default function OnboardingPreviewPage() {
     if (result.ok) {
       setCompletedOrg(result.data);
       clearDraft();
+
+      if (result.data.membership) {
+        await updateSession({
+          role: result.data.membership.role,
+          organizationId: result.data.membership.organizationId,
+          membershipId: result.data.membership.id,
+        });
+      }
+
       toast.success("Organization registered successfully!");
       router.push("/onboarding/confirmation");
     } else if (result.fieldErrors) {

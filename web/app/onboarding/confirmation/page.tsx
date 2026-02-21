@@ -1,46 +1,26 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  CheckCircle2,
   Printer,
   Download,
   Mail,
   ArrowRight,
   FileText,
+  Loader2,
+  PartyPopper,
 } from "lucide-react";
 
 import { useOnboarding } from "../context";
 import { SxButton } from "@/components/sx";
 
-function humanize(value: string): string {
-  return value
-    .replace(/_/g, " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function Field({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | undefined | null;
-}) {
-  return (
-    <div>
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-sm text-foreground">{value || "—"}</dd>
-    </div>
-  );
-}
-
 export default function OnboardingConfirmationPage() {
   const router = useRouter();
   const { completedOrg } = useOnboarding();
-  const printRef = useRef<HTMLDivElement>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(true);
 
   useEffect(() => {
     if (!completedOrg) {
@@ -48,43 +28,36 @@ export default function OnboardingConfirmationPage() {
     }
   }, [completedOrg, router]);
 
+  useEffect(() => {
+    if (!completedOrg) return;
+    setPdfLoading(true);
+    const url = `/api/onboarding/certificate?orgId=${encodeURIComponent(completedOrg.id)}`;
+    setPdfUrl(url);
+    setPdfLoading(false);
+  }, [completedOrg]);
+
   if (!completedOrg) return null;
 
-  const onPrint = () => window.print();
+  const certUrl = `/api/onboarding/certificate?orgId=${encodeURIComponent(completedOrg.id)}`;
 
-  const onDownload = async () => {
-    try {
-      const el = printRef.current;
-      if (!el) return;
-
-      toast.info("Generating PDF...");
-
-      const html2canvas = (await import("html2canvas")).default;
-      const { jsPDF } = await import("jspdf");
-
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
+  const onPrint = () => {
+    const win = window.open(certUrl, "_blank");
+    if (win) {
+      win.addEventListener("load", () => {
+        setTimeout(() => win.print(), 500);
       });
-
-      const imgWidth = 210;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const pdf = new jsPDF("p", "mm", "a4");
-      pdf.addImage(
-        canvas.toDataURL("image/png"),
-        "PNG",
-        0,
-        0,
-        imgWidth,
-        imgHeight,
-      );
-      pdf.save(`${completedOrg.id}.pdf`);
-
-      toast.success("PDF downloaded");
-    } catch {
-      toast.error("Failed to generate PDF. Use Print → Save as PDF instead.");
     }
+  };
+
+  const onDownload = () => {
+    toast.info("Preparing PDF download...");
+    const link = document.createElement("a");
+    link.href = certUrl;
+    link.download = `${completedOrg.id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("PDF download started");
   };
 
   const onEmail = () => {
@@ -98,133 +71,51 @@ export default function OnboardingConfirmationPage() {
 
   return (
     <div className="space-y-6 print:space-y-4">
-      {/* ── Success Banner ── */}
+      {/* ── Congratulations Banner ── */}
       <div className="rounded-lg border border-success/30 bg-success/10 p-6 text-center">
-        <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-success" />
-        <h2 className="text-2xl font-bold text-foreground">
-          Organization Registered
+        <PartyPopper className="mx-auto mb-3 h-10 w-10 text-success" />
+        <h2 className="text-xl font-bold text-foreground">
+          Congratulations!
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your organization has been successfully created
+          <span className="font-semibold text-foreground">{completedOrg.organizationName}</span>{" "}
+          has been successfully registered on SAIREX SMS.
         </p>
-        <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-6 py-3">
+        <div className="mt-3 inline-flex items-center gap-2 rounded-md border border-dashed border-primary/30 bg-primary/5 px-5 py-2">
           <span className="text-xs font-medium text-muted-foreground">
             Organization ID
           </span>
-          <span className="font-data text-2xl font-bold tracking-wider text-primary">
+          <span className="font-data text-lg font-bold tracking-wider text-primary">
             {completedOrg.id}
           </span>
         </div>
       </div>
 
-      {/* ── Printable Details ── */}
-      <div
-        ref={printRef}
-        className="rounded-lg border border-border bg-card shadow-lg"
-      >
-        {/* Identity */}
-        <div className="border-b border-border px-5 py-3">
-          <h3 className="text-sm font-semibold text-foreground">
-            Organization Identity
-          </h3>
-        </div>
-        <div className="grid grid-cols-1 gap-x-8 gap-y-3 px-5 py-4 sm:grid-cols-2">
-          <Field
-            label="Organization Name"
-            value={completedOrg.organizationName}
-          />
-          <Field label="Display Name" value={completedOrg.displayName} />
-          <Field label="Slug" value={completedOrg.slug} />
-          <Field
-            label="Category"
-            value={humanize(completedOrg.organizationCategory)}
-          />
-          <Field
-            label="Structure"
-            value={humanize(completedOrg.organizationStructure)}
-          />
+      {/* ── PDF Preview ── */}
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-lg">
+        <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2.5">
+          <FileText size={16} className="text-primary" />
+          <span className="text-sm font-semibold text-foreground">
+            Registration Certificate
+          </span>
+          
         </div>
 
-        {/* Registration */}
-        <div className="border-y border-border px-5 py-3">
-          <h3 className="text-sm font-semibold text-foreground">
-            Registration Information
-          </h3>
-        </div>
-        <div className="grid grid-cols-1 gap-x-8 gap-y-3 px-5 py-4 sm:grid-cols-2">
-          <Field
-            label="Registration Number"
-            value={completedOrg.registrationNumber}
-          />
-          <Field label="Tax / NTN Number" value={completedOrg.taxNumber} />
-          <Field
-            label="Established Date"
-            value={
-              completedOrg.establishedDate
-                ? new Date(completedOrg.establishedDate).toLocaleDateString()
-                : null
-            }
-          />
-        </div>
-
-        {/* HO Address & Contacts */}
-        <div className="border-y border-border px-5 py-3">
-          <h3 className="text-sm font-semibold text-foreground">
-            HO Address &amp; Contacts
-          </h3>
-        </div>
-        <div className="grid grid-cols-1 gap-x-8 gap-y-3 px-5 py-4 sm:grid-cols-2">
-          <Field
-            label="Head Office Address"
-            value={completedOrg.addressLine1}
-          />
-          <Field label="Address Line 2" value={completedOrg.addressLine2} />
-          <Field label="Country" value={completedOrg.country} />
-          <Field label="Province" value={completedOrg.provinceState} />
-          <Field label="District" value={completedOrg.district} />
-          <Field label="Tehsil" value={completedOrg.tehsil} />
-          <Field label="City" value={completedOrg.city} />
-          <Field label="Postal Code" value={completedOrg.postalCode} />
-          <Field
-            label="Official Email"
-            value={completedOrg.organizationEmail}
-          />
-          <Field
-            label="Land Line Number"
-            value={completedOrg.organizationPhone}
-          />
-          <Field
-            label="Mobile Number"
-            value={completedOrg.organizationMobile}
-          />
-          <Field label="WhatsApp" value={completedOrg.organizationWhatsApp} />
-        </div>
-
-        {/* Branding */}
-        <div className="border-y border-border px-5 py-3">
-          <h3 className="text-sm font-semibold text-foreground">Branding</h3>
-        </div>
-        <div className="grid grid-cols-1 gap-x-8 gap-y-3 px-5 py-4 sm:grid-cols-2">
-          <Field label="Website" value={completedOrg.websiteUrl} />
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">Logo</dt>
-            <dd className="mt-0.5 text-sm text-foreground">
-              {completedOrg.logoUrl ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <FileText size={14} className="text-primary" />
-                  Uploaded
-                </span>
-              ) : (
-                "—"
-              )}
-            </dd>
+        {pdfLoading ? (
+          <div className="flex h-[500px] items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        </div>
-
-        {/* Metadata */}
-        <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
-          Created on {new Date(completedOrg.createdAt).toLocaleString()}
-        </div>
+        ) : pdfUrl ? (
+          <iframe
+            src={pdfUrl}
+            className="h-[500px] w-full border-0"
+            title="Registration Certificate PDF"
+          />
+        ) : (
+          <div className="flex h-[500px] items-center justify-center text-sm text-muted-foreground">
+            Failed to load certificate preview
+          </div>
+        )}
       </div>
 
       {/* ── Action Buttons ── */}

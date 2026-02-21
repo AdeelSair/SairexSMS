@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
     const orgId = await generateOrganizationId();
 
-    const org = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const created = await tx.organization.create({
         data: {
           id: orgId,
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.membership.create({
+      const membership = await tx.membership.create({
         data: {
           userId: guard.id,
           organizationId: created.id,
@@ -112,10 +112,20 @@ export async function POST(request: Request) {
         },
       });
 
-      return created;
+      return { org: created, membership };
     });
 
-    return NextResponse.json(org, { status: 201 });
+    return NextResponse.json(
+      {
+        ...result.org,
+        membership: {
+          id: result.membership.id,
+          role: result.membership.role,
+          organizationId: result.membership.organizationId,
+        },
+      },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Onboarding complete error:", error);
     return NextResponse.json(
