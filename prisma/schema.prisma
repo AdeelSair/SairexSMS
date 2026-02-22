@@ -1,7 +1,7 @@
 // SAIREX SMS — Enterprise SaaS Onboarding + Multi-Tenant RBAC Schema
 
 generator client {
-  provider = "prisma-client-py"
+  provider                    = "prisma-client-py"
   enable_experimental_decimal = true
 }
 
@@ -114,6 +114,78 @@ enum AuditAction {
   MEMBERSHIP_SCOPE_CHANGED
   MEMBERSHIP_REVOKED
   MEMBERSHIP_REACTIVATED
+  PAYMENT_RECONCILED
+  PAYMENT_REVERSED
+  PAYMENT_FAILED
+  FEE_POSTING_STARTED
+  FEE_POSTING_COMPLETED
+  FEE_POSTING_FAILED
+}
+
+enum FinanceRoutingMode {
+  CAMPUS_PRIMARY
+  NEAREST_PARENT_PRIMARY
+}
+
+enum PaymentChannel {
+  OTC
+  BANK_TRANSFER
+  ONLINE_GATEWAY
+  MOBILE_WALLET
+  ONEBILL
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  RECONCILED
+  FAILED
+  REFUNDED
+}
+
+enum ChallanStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum LedgerEntryType {
+  CHALLAN_CREATED
+  PAYMENT_RECEIVED
+  ADJUSTMENT
+  REFUND
+  WAIVER
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum FeeFrequency {
+  MONTHLY
+  TERM
+  ANNUAL
+}
+
+enum PostingRunStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ReminderChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+enum ReminderStatus {
+  SENT
+  FAILED
+  DELIVERED
 }
 
 ////////////////////////////////////////////////////////////
@@ -121,32 +193,33 @@ enum AuditAction {
 ////////////////////////////////////////////////////////////
 
 model User {
-  id                 Int       @id @default(autoincrement())
-  email              String    @unique
-  password           String
-  name               String?
-  isActive           Boolean   @default(false)
+  id       Int     @id @default(autoincrement())
+  email    String  @unique
+  password String
+  name     String?
+  isActive Boolean @default(false)
 
   emailVerifiedAt    DateTime?
   emailVerifyToken   String?   @unique
   emailVerifyExpires DateTime?
 
-  platformRole       PlatformRole?
+  platformRole PlatformRole?
 
-  tokenVersion       Int       @default(0)
+  tokenVersion Int @default(0)
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  memberships        Membership[]
-  createdOrgs        Organization[]     @relation("OrgCreator")
-  sentInvitations    Invitation[]
-  resetTokens        PasswordResetToken[]
-  verificationCodes  VerificationCode[]
-  jobs               Job[]
+  memberships       Membership[]
+  createdOrgs       Organization[]       @relation("OrgCreator")
+  sentInvitations   Invitation[]
+  resetTokens       PasswordResetToken[]
+  verificationCodes VerificationCode[]
+  jobs              Job[]
 
   auditActionsPerformed RbacAuditLog[] @relation("AuditActor")
   auditActionsReceived  RbacAuditLog[] @relation("AuditTarget")
+  postingRuns           PostingRun[]
 }
 
 ////////////////////////////////////////////////////////////
@@ -154,17 +227,17 @@ model User {
 ////////////////////////////////////////////////////////////
 
 model VerificationCode {
-  id           String    @id @default(cuid())
-  userId       Int
-  channel      String    // "email" | "mobile" | "whatsapp"
-  target       String    // email address or phone number
-  codeHash     String    // SHA-256 hex digest of the 6-digit OTP
-  expiresAt    DateTime
-  verified     Boolean   @default(false)
-  verifiedAt   DateTime?
-  attempts     Int       @default(0)
-  lockedUntil  DateTime?
-  createdAt    DateTime  @default(now())
+  id          String    @id @default(cuid())
+  userId      Int
+  channel     String // "email" | "mobile" | "whatsapp"
+  target      String // email address or phone number
+  codeHash    String // SHA-256 hex digest of the 6-digit OTP
+  expiresAt   DateTime
+  verified    Boolean   @default(false)
+  verifiedAt  DateTime?
+  attempts    Int       @default(0)
+  lockedUntil DateTime?
+  createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -186,76 +259,86 @@ model OrganizationSequence {
 
 model Organization {
   /// System
-  id               String              @id @db.VarChar(11)
-  slug             String              @unique
-  status           OrganizationStatus  @default(ACTIVE)
-  onboardingStep   OnboardingStep      @default(ORG_IDENTITY)
+  id             String             @id @db.VarChar(11)
+  slug           String             @unique
+  status         OrganizationStatus @default(ACTIVE)
+  onboardingStep OnboardingStep     @default(ORG_IDENTITY)
 
-  createdByUserId  Int
-  createdBy        User                @relation("OrgCreator", fields: [createdByUserId], references: [id])
+  createdByUserId Int
+  createdBy       User @relation("OrgCreator", fields: [createdByUserId], references: [id])
 
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   /// Core Identity (Step 1: ORG_IDENTITY)
-  organizationName String
-  displayName      String
+  organizationName      String
+  displayName           String
   organizationCategory  OrganizationCategory
   organizationStructure OrganizationStructure
 
   /// Legal (Step 2: LEGAL — nullable until filled)
   registrationNumber String?
   taxNumber          String?
-  establishedDate    DateTime?          @db.Date
+  establishedDate    DateTime? @db.Date
 
   /// HQ Address (Step 3: CONTACT_ADDRESS — nullable until filled)
-  addressLine1     String?
-  addressLine2     String?
-  country          String?
-  provinceState    String?
-  district         String?
-  tehsil           String?
-  city             String?
-  postalCode       String?
+  addressLine1  String?
+  addressLine2  String?
+  country       String?
+  provinceState String?
+  district      String?
+  tehsil        String?
+  city          String?
+  postalCode    String?
 
   /// Contact (Step 3: CONTACT_ADDRESS — nullable until filled)
-  organizationEmail     String?
-  organizationPhone     String?
-  organizationMobile    String?
-  organizationWhatsApp  String?
-  websiteUrl            String?
+  organizationEmail    String?
+  organizationPhone    String?
+  organizationMobile   String?
+  organizationWhatsApp String?
+  websiteUrl           String?
 
   /// Branding (Step 4: BRANDING — always optional)
-  logoUrl          String?
-  logoKey          String?
-  logoUpdatedAt    DateTime?
-  logoLightUrl     String?
-  logoDarkUrl      String?
-  logoPrintUrl     String?
+  logoUrl       String?
+  logoKey       String?
+  logoUpdatedAt DateTime?
+  logoLightUrl  String?
+  logoDarkUrl   String?
+  logoPrintUrl  String?
+
+  /// Finance
+  financeRoutingMode FinanceRoutingMode @default(CAMPUS_PRIMARY)
 
   // Relations
-  memberships       Membership[]
-  mediaAssets       MediaAsset[]
-  invitations       Invitation[]
-  jobs              Job[]
+  memberships Membership[]
+  mediaAssets MediaAsset[]
+  invitations Invitation[]
+  jobs        Job[]
 
-  contacts          OrganizationContact[]
-  addresses         OrganizationAddress[]
-  bankAccounts      OrganizationBank[]
+  contacts     OrganizationContact[]
+  addresses    OrganizationAddress[]
+  bankAccounts OrganizationBank[]
 
-  campuses          Campus[]
-  students          Student[]
-  feeHeads          FeeHead[]
-  feeStructures     FeeStructure[]
-  feeChallans       FeeChallan[]
+  campuses      Campus[]
+  students      Student[]
+  feeHeads      FeeHead[]
+  feeStructures FeeStructure[]
+  feeChallans   FeeChallan[]
 
-  regions           Region[]
-  subRegions        SubRegion[]
-  cities            City[]
-  zones             Zone[]
-  unitCodeSequences UnitCodeSequence[]
-  unitProfiles      UnitProfile[]
-  rbacAuditLogs     RbacAuditLog[]
+  regions            Region[]
+  subRegions         SubRegion[]
+  cities             City[]
+  zones              Zone[]
+  unitCodeSequences  UnitCodeSequence[]
+  unitProfiles       UnitProfile[]
+  unitBankAccounts   UnitBankAccount[]
+  rbacAuditLogs      RbacAuditLog[]
+  paymentRecords     PaymentRecord[]
+  ledgerEntries      LedgerEntry[]
+  financialSummaries StudentFinancialSummary[]
+  postingRuns        PostingRun[]
+  reminderRules      ReminderRule[]
+  reminderLogs       ReminderLog[]
 
   @@index([status])
 }
@@ -265,20 +348,20 @@ model Organization {
 ////////////////////////////////////////////////////////////
 
 model OrganizationContact {
-  id              Int          @id @default(autoincrement())
-  organizationId  String
+  id             Int    @id @default(autoincrement())
+  organizationId String
 
-  name            String
-  designation     String?
-  email           String?
-  phone           String?
+  name        String
+  designation String?
+  email       String?
+  phone       String?
 
-  isPrimary       Boolean      @default(false)
+  isPrimary Boolean @default(false)
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
 }
@@ -288,26 +371,26 @@ model OrganizationContact {
 ////////////////////////////////////////////////////////////
 
 model OrganizationAddress {
-  id              Int          @id @default(autoincrement())
-  organizationId  String
+  id             Int    @id @default(autoincrement())
+  organizationId String
 
-  type            AddressType
+  type AddressType
 
-  country         String
-  province        String
-  city            String
-  area            String?
-  postalCode      String?
+  country    String
+  province   String
+  city       String
+  area       String?
+  postalCode String?
 
-  addressLine1    String
-  addressLine2    String?
+  addressLine1 String
+  addressLine2 String?
 
-  isPrimary       Boolean      @default(false)
+  isPrimary Boolean @default(false)
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
 }
@@ -317,19 +400,19 @@ model OrganizationAddress {
 ////////////////////////////////////////////////////////////
 
 model OrganizationBank {
-  id              Int          @id @default(autoincrement())
-  organizationId  String
+  id             Int    @id @default(autoincrement())
+  organizationId String
 
-  accountTitle    String
-  bankName        String
-  branchName      String?
-  accountNumber   String
-  iban            String?
-  swiftCode       String?
+  accountTitle  String
+  bankName      String
+  branchName    String?
+  accountNumber String
+  iban          String?
+  swiftCode     String?
 
-  isPrimary       Boolean      @default(false)
+  isPrimary Boolean @default(false)
 
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
 }
@@ -412,7 +495,7 @@ model Zone {
   status         UnitStatus @default(ACTIVE)
 
   cityId String
-  city   City @relation(fields: [cityId], references: [id])
+  city   City   @relation(fields: [cityId], references: [id])
 
   organization Organization @relation(fields: [organizationId], references: [id])
   campuses     Campus[]
@@ -425,35 +508,37 @@ model Zone {
 ////////////////////////////////////////////////////////////
 
 model Campus {
-  id                Int             @id @default(autoincrement())
-  organizationId    String          @db.VarChar(11)
-  organization      Organization    @relation(fields: [organizationId], references: [id])
-  name              String
-  campusCode        String          @unique
-  campusSlug        String          @unique
-  unitCode          String          @db.VarChar(5)
-  fullUnitPath      String          @db.VarChar(50)
-  address           String?
+  id             Int          @id @default(autoincrement())
+  organizationId String       @db.VarChar(11)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  campusCode     String       @unique
+  campusSlug     String       @unique
+  unitCode       String       @db.VarChar(5)
+  fullUnitPath   String       @db.VarChar(50)
+  address        String?
 
-  cityId            String
-  city              City            @relation(fields: [cityId], references: [id])
+  cityId String
+  city   City   @relation(fields: [cityId], references: [id])
 
-  zoneId            String?
-  zone              Zone?           @relation(fields: [zoneId], references: [id])
+  zoneId String?
+  zone   Zone?   @relation(fields: [zoneId], references: [id])
 
-  principalName     String?
-  contactPhone      String?
-  email             String?
-  academicStartMonth Int            @default(8)
-  isMainCampus      Boolean         @default(false)
-  status            String          @default("ACTIVE")
-  createdAt         DateTime        @default(now())
-  deletedAt         DateTime?
+  principalName      String?
+  contactPhone       String?
+  email              String?
+  academicStartMonth Int       @default(8)
+  isMainCampus       Boolean   @default(false)
+  status             String    @default("ACTIVE")
+  createdAt          DateTime  @default(now())
+  deletedAt          DateTime?
 
-  memberships       Membership[]
-  students          Student[]
-  feeStructures     FeeStructure[]
-  feeChallans       FeeChallan[]
+  memberships   Membership[]
+  students      Student[]
+  feeStructures FeeStructure[]
+  feeChallans   FeeChallan[]
+  ledgerEntries LedgerEntry[]
+  reminderRules ReminderRule[]
 
   @@index([fullUnitPath])
 }
@@ -468,67 +553,107 @@ model UnitProfile {
   unitType       UnitScopeType
   unitId         String
 
-  displayName    String?
-  email          String?
-  phone          String?
-  mobile         String?
-  whatsapp       String?
-  websiteUrl     String?
-  logoUrl        String?
+  displayName String?
+  email       String?
+  phone       String?
+  mobile      String?
+  whatsapp    String?
+  websiteUrl  String?
+  logoUrl     String?
 
-  status         UnitStatus    @default(ACTIVE)
+  status UnitStatus @default(ACTIVE)
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contacts       UnitContact[]
-  addresses      UnitAddress[]
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts     UnitContact[]
+  addresses    UnitAddress[]
+  bankAccounts UnitBankAccount[]
 
   @@unique([unitType, unitId])
   @@index([organizationId])
 }
 
 model UnitContact {
-  id            String      @id @default(cuid())
+  id            String @id @default(cuid())
   unitProfileId String
 
-  name          String
-  designation   String?
-  email         String?
-  phone         String?
-  mobile        String?
+  name        String
+  designation String?
+  email       String?
+  phone       String?
+  mobile      String?
 
-  isPrimary     Boolean     @default(false)
+  isPrimary Boolean @default(false)
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  unitProfile   UnitProfile @relation(fields: [unitProfileId], references: [id], onDelete: Cascade)
+  unitProfile UnitProfile @relation(fields: [unitProfileId], references: [id], onDelete: Cascade)
 
   @@index([unitProfileId])
 }
 
 model UnitAddress {
-  id            String      @id @default(cuid())
+  id            String @id @default(cuid())
   unitProfileId String
 
-  country       String
-  province      String
-  city          String
-  area          String?
-  addressLine1  String
-  addressLine2  String?
-  postalCode    String?
+  country      String
+  province     String
+  city         String
+  area         String?
+  addressLine1 String
+  addressLine2 String?
+  postalCode   String?
 
-  isPrimary     Boolean     @default(false)
+  isPrimary Boolean @default(false)
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  unitProfile   UnitProfile @relation(fields: [unitProfileId], references: [id], onDelete: Cascade)
+  unitProfile UnitProfile @relation(fields: [unitProfileId], references: [id], onDelete: Cascade)
 
   @@index([unitProfileId])
+}
+
+////////////////////////////////////////////////////////////
+/// UNIT BANK ACCOUNTS (Financial Identity per Unit)
+////////////////////////////////////////////////////////////
+
+model UnitBankAccount {
+  id String @id @default(cuid())
+
+  organizationId String @db.VarChar(11)
+  unitProfileId  String
+
+  bankName   String
+  branchName String?
+  branchCode String?
+
+  accountTitle  String
+  accountNumber String
+  iban          String? @db.VarChar(34)
+
+  swiftCode String? @db.VarChar(11)
+
+  isPrimary Boolean @default(false)
+
+  status UnitStatus @default(ACTIVE)
+
+  notes String? @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  unitProfile    UnitProfile     @relation(fields: [unitProfileId], references: [id], onDelete: Cascade)
+  feeChallans    FeeChallan[]
+  paymentRecords PaymentRecord[]
+
+  @@index([organizationId])
+  @@index([unitProfileId])
+  @@index([status])
 }
 
 ////////////////////////////////////////////////////////////
@@ -536,25 +661,25 @@ model UnitAddress {
 ////////////////////////////////////////////////////////////
 
 model Membership {
-  id              Int              @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  userId          Int
-  organizationId  String
+  userId         Int
+  organizationId String
 
-  role            MembershipRole
-  status          MembershipStatus @default(ACTIVE)
+  role   MembershipRole
+  status MembershipStatus @default(ACTIVE)
 
-  campusId        Int?
+  campusId Int?
 
-  unitId          String?
-  unitPath        String?          @db.VarChar(50)
+  unitId   String?
+  unitPath String? @db.VarChar(50)
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user            User             @relation(fields: [userId], references: [id])
-  organization    Organization     @relation(fields: [organizationId], references: [id])
-  campus          Campus?          @relation(fields: [campusId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  campus       Campus?      @relation(fields: [campusId], references: [id])
 
   @@unique([userId, organizationId])
   @@index([organizationId])
@@ -567,23 +692,23 @@ model Membership {
 ////////////////////////////////////////////////////////////
 
 model Invitation {
-  id              Int              @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  email           String
-  organizationId  String
-  role            MembershipRole
+  email          String
+  organizationId String
+  role           MembershipRole
 
-  token           String           @unique
+  token String @unique
 
-  invitedById     Int
-  invitedBy       User             @relation(fields: [invitedById], references: [id])
+  invitedById Int
+  invitedBy   User @relation(fields: [invitedById], references: [id])
 
-  expiresAt       DateTime
-  acceptedAt      DateTime?
+  expiresAt  DateTime
+  acceptedAt DateTime?
 
-  organization    Organization     @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
-  createdAt       DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@index([organizationId])
 }
@@ -607,18 +732,126 @@ model PasswordResetToken {
 ////////////////////////////////////////////////////////////
 
 model Student {
-  id             Int      @id @default(autoincrement())
-  fullName       String
-  admissionNo    String   @unique
-  grade          String
-  feeStatus      String   @default("Unpaid")
+  id          Int    @id @default(autoincrement())
+  fullName    String
+  admissionNo String @unique
+  grade       String
+  feeStatus   String @default("Unpaid")
 
   organizationId String       @db.VarChar(11)
   organization   Organization @relation(fields: [organizationId], references: [id])
   campusId       Int
   campus         Campus       @relation(fields: [campusId], references: [id])
 
-  feeChallans    FeeChallan[]
+  feeChallans      FeeChallan[]
+  ledgerEntries    LedgerEntry[]
+  financialSummary StudentFinancialSummary?
+  reminderLogs     ReminderLog[]
+}
+
+model StudentFinancialSummary {
+  studentId      Int    @id
+  organizationId String @db.VarChar(11)
+  campusId       Int
+
+  totalDebit  Decimal @default(0) @db.Decimal(12, 2)
+  totalCredit Decimal @default(0) @db.Decimal(12, 2)
+  balance     Decimal @default(0) @db.Decimal(12, 2)
+
+  updatedAt DateTime @updatedAt
+
+  student      Student      @relation(fields: [studentId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, campusId])
+  @@index([balance])
+}
+
+////////////////////////////////////////////////////////////
+/// FEE POSTING RUN (Idempotency Guard)
+////////////////////////////////////////////////////////////
+
+model PostingRun {
+  id             String @id @default(cuid())
+  organizationId String @db.VarChar(11)
+
+  month Int
+  year  Int
+
+  campusId Int?
+
+  status      PostingRunStatus @default(PENDING)
+  startedAt   DateTime         @default(now())
+  completedAt DateTime?
+
+  totalStudents Int     @default(0)
+  totalChallans Int     @default(0)
+  totalAmount   Decimal @default(0) @db.Decimal(12, 2)
+
+  errorMessage String?
+
+  createdByUserId Int?
+  createdByUser   User?        @relation(fields: [createdByUserId], references: [id])
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, month, year])
+  @@index([organizationId])
+  @@index([status])
+}
+
+////////////////////////////////////////////////////////////
+/// REMINDER ENGINE (Automated Collection)
+////////////////////////////////////////////////////////////
+
+model ReminderRule {
+  id             String @id @default(cuid())
+  organizationId String @db.VarChar(11)
+  campusId       Int?
+
+  name           String
+  minDaysOverdue Int
+  maxDaysOverdue Int?
+
+  channel  ReminderChannel
+  template String          @db.Text
+
+  frequencyDays Int @default(7)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  campus       Campus?       @relation(fields: [campusId], references: [id])
+  reminderLogs ReminderLog[]
+
+  @@index([organizationId, isActive])
+}
+
+model ReminderLog {
+  id             String @id @default(cuid())
+  organizationId String @db.VarChar(11)
+  studentId      Int
+  challanId      Int?
+  reminderRuleId String
+
+  channel ReminderChannel
+  sentAt  DateTime        @default(now())
+  status  ReminderStatus
+
+  messageBody String? @db.Text
+  externalRef String?
+  errorDetail String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  student      Student      @relation(fields: [studentId], references: [id])
+  challan      FeeChallan?  @relation(fields: [challanId], references: [id])
+  reminderRule ReminderRule @relation(fields: [reminderRuleId], references: [id])
+
+  @@index([studentId, reminderRuleId, sentAt])
+  @@index([organizationId])
+  @@index([challanId])
 }
 
 ////////////////////////////////////////////////////////////
@@ -626,15 +859,15 @@ model Student {
 ////////////////////////////////////////////////////////////
 
 model FeeHead {
-  id             Int          @id @default(autoincrement())
-  organizationId String       @db.VarChar(11)
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String
-  type           String
-  isSystemDefault Boolean     @default(false)
-  createdAt      DateTime     @default(now())
+  id              Int          @id @default(autoincrement())
+  organizationId  String       @db.VarChar(11)
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  name            String
+  type            String
+  isSystemDefault Boolean      @default(false)
+  createdAt       DateTime     @default(now())
 
-  structures     FeeStructure[]
+  structures FeeStructure[]
 }
 
 model FeeStructure {
@@ -644,18 +877,24 @@ model FeeStructure {
   organization   Organization @relation(fields: [organizationId], references: [id])
   campus         Campus       @relation(fields: [campusId], references: [id])
 
-  feeHeadId      Int
-  feeHead        FeeHead      @relation(fields: [feeHeadId], references: [id])
+  feeHeadId Int
+  feeHead   FeeHead @relation(fields: [feeHeadId], references: [id])
 
-  name           String
-  amount         Decimal      @default(0.00)
-  currency       String       @default("PKR")
-  frequency      String
+  name      String
+  amount    Decimal      @default(0.00) @db.Decimal(12, 2)
+  currency  String       @default("PKR")
+  frequency FeeFrequency @default(MONTHLY)
 
   applicableGrade String?
+  startMonth      Int?
+  endMonth        Int?
 
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  feeChallans FeeChallan[]
+
+  @@index([organizationId, isActive])
 }
 
 model FeeChallan {
@@ -667,18 +906,109 @@ model FeeChallan {
   campus         Campus       @relation(fields: [campusId], references: [id])
   student        Student      @relation(fields: [studentId], references: [id])
 
-  challanNo      String       @unique
-  issueDate      DateTime     @default(now())
-  dueDate        DateTime
+  challanNo String   @unique
+  issueDate DateTime @default(now())
+  dueDate   DateTime
 
-  totalAmount    Decimal
-  paidAmount     Decimal      @default(0.00)
-  status         String       @default("UNPAID")
+  totalAmount Decimal       @db.Decimal(12, 2)
+  paidAmount  Decimal       @default(0.00) @db.Decimal(12, 2)
+  status      ChallanStatus @default(UNPAID)
 
-  paymentMethod  String?
-  paidAt         DateTime?
+  paymentMethod String?
+  paidAt        DateTime?
 
-  generatedBy    String
+  generatedBy String
+
+  month          Int?
+  year           Int?
+  feeStructureId Int?
+  feeStructure   FeeStructure? @relation(fields: [feeStructureId], references: [id])
+
+  bankAccountId String?
+  bankAccount   UnitBankAccount? @relation(fields: [bankAccountId], references: [id])
+
+  paymentRecords PaymentRecord[]
+  ledgerEntries  LedgerEntry[]
+  reminderLogs   ReminderLog[]
+
+  @@unique([studentId, month, year, feeStructureId])
+  @@index([bankAccountId])
+  @@index([organizationId])
+  @@index([studentId])
+  @@index([status])
+  @@index([feeStructureId])
+}
+
+////////////////////////////////////////////////////////////
+/// PAYMENT RECORD (Raw Incoming Money)
+////////////////////////////////////////////////////////////
+
+model PaymentRecord {
+  id             String  @id @default(cuid())
+  organizationId String  @db.VarChar(11)
+  bankAccountId  String?
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency String  @default("PKR")
+
+  transactionRef String?
+  paymentChannel PaymentChannel
+
+  paidAt     DateTime
+  receivedAt DateTime @default(now())
+
+  status PaymentStatus @default(PENDING)
+
+  rawPayload Json?
+
+  challanId Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  bankAccount  UnitBankAccount? @relation(fields: [bankAccountId], references: [id])
+  challan      FeeChallan?      @relation(fields: [challanId], references: [id])
+
+  @@index([organizationId])
+  @@index([transactionRef])
+  @@index([challanId])
+  @@index([status])
+}
+
+////////////////////////////////////////////////////////////
+/// LEDGER ENTRY (Financial Truth Layer)
+////////////////////////////////////////////////////////////
+
+model LedgerEntry {
+  id             String @id @default(cuid())
+  organizationId String @db.VarChar(11)
+  studentId      Int?
+  campusId       Int?
+  challanId      Int?
+
+  entryType LedgerEntryType
+  direction LedgerDirection
+  amount    Decimal         @db.Decimal(12, 2)
+
+  referenceId   String?
+  referenceType String?
+
+  notes String?
+
+  entryDate DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  student      Student?     @relation(fields: [studentId], references: [id])
+  campus       Campus?      @relation(fields: [campusId], references: [id])
+  challan      FeeChallan?  @relation(fields: [challanId], references: [id])
+
+  @@index([organizationId, studentId])
+  @@index([studentId, entryDate])
+  @@index([challanId])
+  @@index([campusId])
+  @@index([entryType])
 }
 
 ////////////////////////////////////////////////////////////
@@ -686,29 +1016,29 @@ model FeeChallan {
 ////////////////////////////////////////////////////////////
 
 model Job {
-  id             String    @id @default(cuid())
-  type           String    // EMAIL, SMS, WHATSAPP, CHALLAN_PDF, REPORT, IMPORT, OTP
-  queue          String    @default("default")
-  payload        Json
-  status         String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, DEAD
-  priority       Int       @default(0)
-  attempts       Int       @default(0)
-  maxAttempts    Int       @default(3)
-  scheduledAt    DateTime?
-  startedAt      DateTime?
-  completedAt    DateTime?
-  failedAt       DateTime?
-  error          String?
-  result         Json?
+  id          String    @id @default(cuid())
+  type        String // EMAIL, SMS, WHATSAPP, CHALLAN_PDF, REPORT, IMPORT, OTP
+  queue       String    @default("default")
+  payload     Json
+  status      String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, DEAD
+  priority    Int       @default(0)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  error       String?
+  result      Json?
 
-  organizationId String?   @db.VarChar(11)
+  organizationId String? @db.VarChar(11)
   userId         Int?
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  user           User?         @relation(fields: [userId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id])
 
   @@index([status, scheduledAt])
   @@index([type, status])
@@ -747,29 +1077,29 @@ model MediaAsset {
 ////////////////////////////////////////////////////////////
 
 model RbacAuditLog {
-  id               String          @id @default(cuid())
+  id String @id @default(cuid())
 
-  organizationId   String          @db.VarChar(11)
-  action           AuditAction
+  organizationId String      @db.VarChar(11)
+  action         AuditAction
 
-  actorUserId      Int
-  targetUserId     Int
-  membershipId     Int
+  actorUserId  Int
+  targetUserId Int
+  membershipId Int
 
-  oldRole          MembershipRole?
-  newRole          MembershipRole?
+  oldRole MembershipRole?
+  newRole MembershipRole?
 
-  oldUnitPath      String?         @db.VarChar(50)
-  newUnitPath      String?         @db.VarChar(50)
+  oldUnitPath String? @db.VarChar(50)
+  newUnitPath String? @db.VarChar(50)
 
-  ipAddress        String?
-  userAgent        String?
+  ipAddress String?
+  userAgent String?
 
-  createdAt        DateTime        @default(now())
+  createdAt DateTime @default(now())
 
-  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  actor            User            @relation("AuditActor", fields: [actorUserId], references: [id])
-  target           User            @relation("AuditTarget", fields: [targetUserId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User         @relation("AuditActor", fields: [actorUserId], references: [id])
+  target       User         @relation("AuditTarget", fields: [targetUserId], references: [id])
 
   @@index([organizationId, createdAt])
   @@index([membershipId])

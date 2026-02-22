@@ -3,6 +3,7 @@ import type { UnitScopeType } from "@/lib/generated/prisma";
 import type { UpdateUnitProfileInput } from "@/lib/validations/unit-profile";
 import type { CreateUnitContactInput, UpdateUnitContactInput } from "@/lib/validations/unit-contact";
 import type { CreateUnitAddressInput, UpdateUnitAddressInput } from "@/lib/validations/unit-address";
+import type { CreateUnitBankInput, UpdateUnitBankInput } from "@/lib/validations/unit-bank";
 
 /* ── Profile ──────────────────────────────────────────────── */
 
@@ -110,4 +111,61 @@ export async function updateAddress(addressId: string, profileId: string, data: 
 
 export async function deleteAddress(addressId: string) {
   return prisma.unitAddress.delete({ where: { id: addressId } });
+}
+
+/* ── Bank Accounts ───────────────────────────────────────── */
+
+export async function listBankAccounts(profileId: string) {
+  return prisma.unitBankAccount.findMany({
+    where: { unitProfileId: profileId, status: { not: "ARCHIVED" } },
+    orderBy: [{ isPrimary: "desc" }, { bankName: "asc" }],
+  });
+}
+
+export async function createBankAccount(
+  profileId: string,
+  organizationId: string,
+  data: Omit<CreateUnitBankInput, "unitType" | "unitId">,
+) {
+  return prisma.$transaction(async (tx) => {
+    if (data.isPrimary) {
+      await tx.unitBankAccount.updateMany({
+        where: { unitProfileId: profileId, isPrimary: true },
+        data: { isPrimary: false },
+      });
+    }
+    return tx.unitBankAccount.create({
+      data: {
+        ...data,
+        unitProfileId: profileId,
+        organizationId,
+      },
+    });
+  });
+}
+
+export async function updateBankAccount(
+  accountId: string,
+  profileId: string,
+  data: UpdateUnitBankInput,
+) {
+  return prisma.$transaction(async (tx) => {
+    if (data.isPrimary) {
+      await tx.unitBankAccount.updateMany({
+        where: { unitProfileId: profileId, isPrimary: true, id: { not: accountId } },
+        data: { isPrimary: false },
+      });
+    }
+    return tx.unitBankAccount.update({
+      where: { id: accountId },
+      data,
+    });
+  });
+}
+
+export async function archiveBankAccount(accountId: string) {
+  return prisma.unitBankAccount.update({
+    where: { id: accountId },
+    data: { status: "ARCHIVED", isPrimary: false },
+  });
 }
