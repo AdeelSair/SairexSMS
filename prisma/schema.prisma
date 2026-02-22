@@ -26,7 +26,12 @@ enum PlatformRole {
 
 enum MembershipRole {
   ORG_ADMIN
+
+  REGION_ADMIN
+  SUBREGION_ADMIN
+  ZONE_ADMIN
   CAMPUS_ADMIN
+
   TEACHER
   ACCOUNTANT
   PARENT
@@ -82,6 +87,12 @@ enum UnitScopeType {
   CAMPUS
 }
 
+enum UnitStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
 enum MediaType {
   LOGO
   FAVICON
@@ -95,6 +106,14 @@ enum MediaVariant {
   LG
   DARK
   PRINT
+}
+
+enum AuditAction {
+  MEMBERSHIP_INVITED
+  MEMBERSHIP_ROLE_CHANGED
+  MEMBERSHIP_SCOPE_CHANGED
+  MEMBERSHIP_REVOKED
+  MEMBERSHIP_REACTIVATED
 }
 
 ////////////////////////////////////////////////////////////
@@ -125,6 +144,9 @@ model User {
   resetTokens        PasswordResetToken[]
   verificationCodes  VerificationCode[]
   jobs               Job[]
+
+  auditActionsPerformed RbacAuditLog[] @relation("AuditActor")
+  auditActionsReceived  RbacAuditLog[] @relation("AuditTarget")
 }
 
 ////////////////////////////////////////////////////////////
@@ -227,6 +249,14 @@ model Organization {
   feeStructures     FeeStructure[]
   feeChallans       FeeChallan[]
 
+  regions           Region[]
+  subRegions        SubRegion[]
+  cities            City[]
+  zones             Zone[]
+  unitCodeSequences UnitCodeSequence[]
+  unitProfiles      UnitProfile[]
+  rbacAuditLogs     RbacAuditLog[]
+
   @@index([status])
 }
 
@@ -309,12 +339,15 @@ model OrganizationBank {
 ////////////////////////////////////////////////////////////
 
 model UnitCodeSequence {
-  id        String        @id @default(cuid())
-  scopeType UnitScopeType
-  scopeId   String?
-  lastValue Int           @default(0)
+  id             String        @id @default(cuid())
+  scopeType      UnitScopeType
+  scopeId        String?
+  organizationId String        @db.VarChar(11)
+  lastValue      Int           @default(0)
 
-  @@unique([scopeType, scopeId])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, scopeType, scopeId])
 }
 
 ////////////////////////////////////////////////////////////
@@ -322,49 +355,69 @@ model UnitCodeSequence {
 ////////////////////////////////////////////////////////////
 
 model Region {
-  id       String @id @default(cuid())
-  name     String
-  unitCode String @unique @db.VarChar(5)
+  id             String     @id @default(cuid())
+  name           String
+  unitCode       String     @db.VarChar(5)
+  organizationId String     @db.VarChar(11)
+  status         UnitStatus @default(ACTIVE)
 
-  subRegions SubRegion[]
-  cities     City[]
+  organization Organization @relation(fields: [organizationId], references: [id])
+  subRegions   SubRegion[]
+  cities       City[]
+
+  @@unique([organizationId, unitCode])
 }
 
 model SubRegion {
-  id       String @id @default(cuid())
-  name     String
-  unitCode String @db.VarChar(5)
+  id             String     @id @default(cuid())
+  name           String
+  unitCode       String     @db.VarChar(5)
+  organizationId String     @db.VarChar(11)
+  status         UnitStatus @default(ACTIVE)
 
   regionId String?
   region   Region? @relation(fields: [regionId], references: [id])
 
-  cities City[]
+  organization Organization @relation(fields: [organizationId], references: [id])
+  cities       City[]
+
+  @@unique([organizationId, regionId, unitCode])
 }
 
 model City {
-  id       String @id @default(cuid())
-  name     String
-  unitCode String @unique @db.VarChar(5)
+  id             String     @id @default(cuid())
+  name           String
+  unitCode       String     @db.VarChar(5)
+  organizationId String     @db.VarChar(11)
+  status         UnitStatus @default(ACTIVE)
 
   regionId    String?
   subRegionId String?
 
-  region    Region?    @relation(fields: [regionId], references: [id])
-  subRegion SubRegion? @relation(fields: [subRegionId], references: [id])
+  region       Region?      @relation(fields: [regionId], references: [id])
+  subRegion    SubRegion?   @relation(fields: [subRegionId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   zones    Zone[]
   campuses Campus[]
+
+  @@unique([organizationId, unitCode])
 }
 
 model Zone {
-  id       String @id @default(cuid())
-  name     String
-  unitCode String @db.VarChar(5)
+  id             String     @id @default(cuid())
+  name           String
+  unitCode       String     @db.VarChar(5)
+  organizationId String     @db.VarChar(11)
+  status         UnitStatus @default(ACTIVE)
 
   cityId String
   city   City @relation(fields: [cityId], references: [id])
 
-  campuses Campus[]
+  organization Organization @relation(fields: [organizationId], references: [id])
+  campuses     Campus[]
+
+  @@unique([organizationId, cityId, unitCode])
 }
 
 ////////////////////////////////////////////////////////////
@@ -406,6 +459,79 @@ model Campus {
 }
 
 ////////////////////////////////////////////////////////////
+/// UNIT ADMINISTRATION (Profile, Contacts, Addresses)
+////////////////////////////////////////////////////////////
+
+model UnitProfile {
+  id             String        @id @default(cuid())
+  organizationId String        @db.VarChar(11)
+  unitType       UnitScopeType
+  unitId         String
+
+  displayName    String?
+  email          String?
+  phone          String?
+  mobile         String?
+  whatsapp       String?
+  websiteUrl     String?
+  logoUrl        String?
+
+  status         UnitStatus    @default(ACTIVE)
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts       UnitContact[]
+  addresses      UnitAddress[]
+
+  @@unique([unitType, unitId])
+  @@index([organizationId])
+}
+
+model UnitContact {
+  id            String      @id @default(cuid())
+  unitProfileId String
+
+  name          String
+  designation   String?
+  email         String?
+  phone         String?
+  mobile        String?
+
+  isPrimary     Boolean     @default(false)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  unitProfile   UnitProfile @relation(fields: [unitProfileId], references: [id], onDelete: Cascade)
+
+  @@index([unitProfileId])
+}
+
+model UnitAddress {
+  id            String      @id @default(cuid())
+  unitProfileId String
+
+  country       String
+  province      String
+  city          String
+  area          String?
+  addressLine1  String
+  addressLine2  String?
+  postalCode    String?
+
+  isPrimary     Boolean     @default(false)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  unitProfile   UnitProfile @relation(fields: [unitProfileId], references: [id], onDelete: Cascade)
+
+  @@index([unitProfileId])
+}
+
+////////////////////////////////////////////////////////////
 /// MEMBERSHIP (TENANT RBAC BRIDGE)
 ////////////////////////////////////////////////////////////
 
@@ -420,6 +546,9 @@ model Membership {
 
   campusId        Int?
 
+  unitId          String?
+  unitPath        String?          @db.VarChar(50)
+
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -429,6 +558,8 @@ model Membership {
 
   @@unique([userId, organizationId])
   @@index([organizationId])
+  @@index([unitPath])
+  @@index([role, unitPath])
 }
 
 ////////////////////////////////////////////////////////////
@@ -609,4 +740,38 @@ model MediaAsset {
 
   @@index([organizationId, type])
   @@index([organizationId, type, variant])
+}
+
+////////////////////////////////////////////////////////////
+/// RBAC AUDIT LOG
+////////////////////////////////////////////////////////////
+
+model RbacAuditLog {
+  id               String          @id @default(cuid())
+
+  organizationId   String          @db.VarChar(11)
+  action           AuditAction
+
+  actorUserId      Int
+  targetUserId     Int
+  membershipId     Int
+
+  oldRole          MembershipRole?
+  newRole          MembershipRole?
+
+  oldUnitPath      String?         @db.VarChar(50)
+  newUnitPath      String?         @db.VarChar(50)
+
+  ipAddress        String?
+  userAgent        String?
+
+  createdAt        DateTime        @default(now())
+
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor            User            @relation("AuditActor", fields: [actorUserId], references: [id])
+  target           User            @relation("AuditTarget", fields: [targetUserId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([membershipId])
+  @@index([targetUserId])
 }

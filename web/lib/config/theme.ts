@@ -108,6 +108,8 @@ export const navigation: NavGroup[] = [
     label: "Admin",
     items: [
       { label: "Users & Invites", href: "/admin/users", icon: "Users" },
+      { label: "Audit Log", href: "/admin/audit", icon: "ScrollText" },
+      { label: "Access Coverage", href: "/admin/analytics/access-coverage", icon: "BarChart3" },
     ],
   },
   {

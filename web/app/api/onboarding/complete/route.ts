@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireVerifiedAuth } from "@/lib/auth-guard";
 import { generateOrganizationId } from "@/lib/id-generators";
 import { onboardingCompleteSchema } from "@/lib/validations/onboarding";
+import { generateUnitCode, generateCityCode, buildFullUnitPath } from "@/lib/unit-code";
+import { createUnitProfile } from "@/lib/unit-profile";
 
 function slugify(name: string): string {
   return name
@@ -17,7 +19,8 @@ function slugify(name: string): string {
  *
  * Unified endpoint: validates ALL onboarding data, generates the
  * Organization ID, and creates the Organization + Membership in a
- * single transaction. Nothing is persisted until this call.
+ * single transaction. For SINGLE-structure orgs, also auto-creates
+ * a default City (from HQ address) and the main Campus.
  */
 export async function POST(request: Request) {
   const guard = await requireVerifiedAuth();
@@ -68,6 +71,7 @@ export async function POST(request: Request) {
     const orgId = await generateOrganizationId();
 
     const result = await prisma.$transaction(async (tx) => {
+      /* ── 1. Create Organization ─────────────────────────── */
       const created = await tx.organization.create({
         data: {
           id: orgId,
@@ -103,16 +107,58 @@ export async function POST(request: Request) {
         },
       });
 
+      /* ── 2. Auto-create main campus for SINGLE structure ── */
+      let mainCampusId: number | null = null;
+
+      if (created.organizationStructure === "SINGLE") {
+        const cityName = contactAddress.city || created.displayName;
+        const cityCode = await generateCityCode(cityName, orgId, tx);
+
+        const defaultCity = await tx.city.create({
+          data: {
+            name: cityName,
+            unitCode: cityCode,
+            organizationId: orgId,
+          },
+        });
+
+        const campusUnitCode = await generateUnitCode("CAMPUS", defaultCity.id, orgId, tx);
+        const fullUnitPath = await buildFullUnitPath(defaultCity.id, null, campusUnitCode, tx);
+
+        const campusCode = `${orgId}-${fullUnitPath}`;
+
+        const campus = await tx.campus.create({
+          data: {
+            name: created.displayName,
+            campusCode,
+            campusSlug: campusCode.toLowerCase(),
+            unitCode: campusUnitCode,
+            fullUnitPath,
+            organizationId: orgId,
+            cityId: defaultCity.id,
+            isMainCampus: true,
+            status: "ACTIVE",
+          },
+        });
+
+        mainCampusId = campus.id;
+
+        await createUnitProfile({ tx, organizationId: orgId, unitType: "CITY", unitId: defaultCity.id, displayName: cityName });
+        await createUnitProfile({ tx, organizationId: orgId, unitType: "CAMPUS", unitId: String(campus.id), displayName: campus.name });
+      }
+
+      /* ── 3. Create ORG_ADMIN membership ─────────────────── */
       const membership = await tx.membership.create({
         data: {
           userId: guard.id,
           organizationId: created.id,
           role: "ORG_ADMIN",
           status: "ACTIVE",
+          campusId: mainCampusId,
         },
       });
 
-      return { org: created, membership };
+      return { org: created, membership, mainCampusId };
     });
 
     return NextResponse.json(
@@ -122,6 +168,8 @@ export async function POST(request: Request) {
           id: result.membership.id,
           role: result.membership.role,
           organizationId: result.membership.organizationId,
+          organizationStructure: result.org.organizationStructure,
+          campusId: result.mainCampusId,
         },
       },
       { status: 201 },

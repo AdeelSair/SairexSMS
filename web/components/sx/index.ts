@@ -25,3 +25,8 @@ export {
 } from "./sx-form-section";
 
 export { SxProfileHeader } from "./sx-profile-header";
+
+export {
+  UserAccessDrawer,
+  type UserAccessTarget,
+} from "./user-access-drawer";

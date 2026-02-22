@@ -23,11 +23,13 @@ const SCOPE_PREFIX: Record<string, string> = {
 
 /**
  * Generate a sequential unit code (R01, S01, Z01, C01) via atomic DB increment.
+ * Scoped per organization for true multi-tenant isolation.
  * Must be called inside a Prisma $transaction.
  */
 export async function generateUnitCode(
   scopeType: "REGION" | "SUBREGION" | "ZONE" | "CAMPUS",
   scopeId: string | null,
+  organizationId: string,
   tx: TransactionClient,
 ): Promise<string> {
   const prefix = SCOPE_PREFIX[scopeType];
@@ -35,11 +37,12 @@ export async function generateUnitCode(
 
   const sequence = await tx.unitCodeSequence.upsert({
     where: {
-      scopeType_scopeId: { scopeType, scopeId: key },
+      organizationId_scopeType_scopeId: { organizationId, scopeType, scopeId: key },
     },
     create: {
       scopeType,
       scopeId: key,
+      organizationId,
       lastValue: 1,
     },
     update: {
@@ -52,21 +55,18 @@ export async function generateUnitCode(
 
 /**
  * Generate a 3-letter city code from the city name.
- * Strategy:
- *   1. Check well-known Pakistan city abbreviations
- *   2. Fall back to first 3 consonants (or chars) of the name
- *   3. If duplicate exists, append a numeric suffix (LHR2, LHR3, ...)
- *
+ * Scoped per organization — each org gets its own code namespace.
  * Must be called inside a Prisma $transaction.
  */
 export async function generateCityCode(
   cityName: string,
+  organizationId: string,
   tx: TransactionClient,
 ): Promise<string> {
   const base = deriveCityAbbreviation(cityName);
 
   const existing = await tx.city.findFirst({
-    where: { unitCode: base },
+    where: { unitCode: base, organizationId },
   });
 
   if (!existing) return base;
@@ -76,7 +76,7 @@ export async function generateCityCode(
   while (true) {
     const candidate = `${base}${suffix}`;
     const taken = await tx.city.findFirst({
-      where: { unitCode: candidate },
+      where: { unitCode: candidate, organizationId },
     });
     if (!taken) return candidate;
     suffix++;

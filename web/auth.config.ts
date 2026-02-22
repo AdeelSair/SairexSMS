@@ -29,6 +29,8 @@ export const authConfig = {
         token.organizationId = (user as Record<string, unknown>).organizationId ?? null;
         token.campusId = (user as Record<string, unknown>).campusId ?? null;
         token.membershipId = (user as Record<string, unknown>).membershipId ?? null;
+        token.organizationStructure = (user as Record<string, unknown>).organizationStructure ?? null;
+        token.unitPath = (user as Record<string, unknown>).unitPath ?? null;
       }
 
       if (trigger === "update" && session) {
@@ -37,6 +39,8 @@ export const authConfig = {
         if (s.organizationId !== undefined) token.organizationId = s.organizationId;
         if (s.campusId !== undefined) token.campusId = s.campusId;
         if (s.membershipId !== undefined) token.membershipId = s.membershipId;
+        if (s.organizationStructure !== undefined) token.organizationStructure = s.organizationStructure;
+        if (s.unitPath !== undefined) token.unitPath = s.unitPath;
       }
 
       return token;
@@ -50,6 +54,8 @@ export const authConfig = {
         u.organizationId = token.organizationId ?? null;
         u.campusId = token.campusId ?? null;
         u.membershipId = token.membershipId ?? null;
+        u.organizationStructure = token.organizationStructure ?? null;
+        u.unitPath = token.unitPath ?? null;
       }
       return session;
     },

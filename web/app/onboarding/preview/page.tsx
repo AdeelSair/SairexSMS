@@ -109,6 +109,8 @@ export default function OnboardingPreviewPage() {
           role: result.data.membership.role,
           organizationId: result.data.membership.organizationId,
           membershipId: result.data.membership.id,
+          organizationStructure: result.data.membership.organizationStructure,
+          campusId: result.data.membership.campusId,
         });
       }
 

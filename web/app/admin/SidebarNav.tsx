@@ -13,6 +13,10 @@ import {
   Wallet,
   Users,
   KeyRound,
+  ScrollText,
+  Activity,
+  Wrench,
+  BarChart3,
 } from "lucide-react";
 
 const ICON_MAP: Record<string, React.ComponentType<{ size?: number }>> = {
@@ -24,6 +28,10 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number }>> = {
   Wallet,
   Users,
   KeyRound,
+  ScrollText,
+  Activity,
+  Wrench,
+  BarChart3,
 };
 
 interface SidebarNavProps {

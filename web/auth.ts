@@ -56,6 +56,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           organizationId: membership?.organizationId ?? null,
           campusId: membership?.campusId ?? null,
           membershipId: membership?.id ?? null,
+          organizationStructure: membership?.organization?.organizationStructure ?? null,
+          unitPath: membership?.unitPath ?? null,
         };
       },
     }),

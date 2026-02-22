@@ -3,42 +3,85 @@ import { AuthUser, isSuperAdmin } from "./auth-guard";
 import { prisma } from "./prisma";
 
 // ────────────────────────────────────────────────────────────
-// 1.  SCOPE FILTER — builds the Prisma `where` clause
-//     Respects SUPER_ADMIN (all), ORG_ADMIN (org), CAMPUS_ADMIN (org+campus)
+// 1.  SCOPE FILTER — Hierarchical RBAC
+//     Structure-aware + unitPath prefix filtering.
 // ────────────────────────────────────────────────────────────
 
 type ScopeOptions = {
-  /** Set true for models that have a campusId column (students, challans, structures, etc.) */
+  /** Set true for models that have a campusId column (students, challans, etc.) */
   hasCampus?: boolean;
 };
+
+const HIERARCHICAL_ROLES = ["REGION_ADMIN", "SUBREGION_ADMIN", "ZONE_ADMIN"];
 
 /**
  * Returns a Prisma-compatible `where` filter scoped to the user's tenant.
  *
- * - SUPER_ADMIN  → {} (no restriction)
- * - ORG_ADMIN    → { organizationId }
- * - CAMPUS_ADMIN → { organizationId, campusId }  (if model has campusId)
- * - Others       → { organizationId, campusId }  (if model has campusId)
+ * | Case                           | Filter                                              |
+ * |--------------------------------|------------------------------------------------------|
+ * | SUPER_ADMIN                    | `{}`                                                 |
+ * | SINGLE structure (any role)    | `{ organizationId }`                                 |
+ * | ORG_ADMIN                      | `{ organizationId }`                                 |
+ * | REGION/SUBREGION/ZONE_ADMIN    | `{ organizationId, campus: { fullUnitPath starts } }`|
+ * | CAMPUS_ADMIN (unitPath)        | `{ organizationId, campus: { fullUnitPath exact } }`  |
+ * | Legacy campus-scoped           | `{ organizationId, campusId }`                       |
+ * | Staff with unitPath            | `{ organizationId, campus: { fullUnitPath exact } }`  |
  */
 export function scopeFilter(
   guard: AuthUser,
-  opts: ScopeOptions = {}
+  opts: ScopeOptions = {},
 ): Record<string, unknown> {
   if (isSuperAdmin(guard)) return {};
 
-  const where: Record<string, unknown> = {
+  const baseFilter: Record<string, unknown> = {
     organizationId: guard.organizationId,
   };
 
-  if (
-    opts.hasCampus &&
-    guard.campusId &&
-    !["ORG_ADMIN"].includes(guard.role ?? "")
-  ) {
-    where.campusId = guard.campusId;
+  if (!opts.hasCampus) return baseFilter;
+
+  if (guard.organizationStructure === "SINGLE") {
+    return baseFilter;
   }
 
-  return where;
+  if (guard.role === "ORG_ADMIN") {
+    return baseFilter;
+  }
+
+  if (HIERARCHICAL_ROLES.includes(guard.role ?? "") && guard.unitPath) {
+    return {
+      ...baseFilter,
+      campus: {
+        fullUnitPath: { startsWith: guard.unitPath },
+      },
+    };
+  }
+
+  if (guard.role === "CAMPUS_ADMIN" && guard.unitPath) {
+    return {
+      ...baseFilter,
+      campus: {
+        fullUnitPath: guard.unitPath,
+      },
+    };
+  }
+
+  if (guard.campusId) {
+    return {
+      ...baseFilter,
+      campusId: guard.campusId,
+    };
+  }
+
+  if (guard.unitPath) {
+    return {
+      ...baseFilter,
+      campus: {
+        fullUnitPath: guard.unitPath,
+      },
+    };
+  }
+
+  return baseFilter;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -51,7 +94,7 @@ export function scopeFilter(
  */
 export function resolveOrgId(
   guard: AuthUser,
-  bodyOrgId?: string | null
+  bodyOrgId?: string | null,
 ): string {
   if (isSuperAdmin(guard) && bodyOrgId) {
     return bodyOrgId;
@@ -65,11 +108,8 @@ export function resolveOrgId(
 // ────────────────────────────────────────────────────────────
 
 type CrossRefCheck = {
-  /** Prisma model name (lowercase, matching prisma client accessor) */
   model: "campus" | "feeHead" | "student";
-  /** The ID value supplied by the client */
   id: number;
-  /** Human-readable label for error messages */
   label: string;
 };
 
@@ -79,7 +119,7 @@ type CrossRefCheck = {
  */
 export async function validateCrossRefs(
   orgId: string,
-  checks: CrossRefCheck[]
+  checks: CrossRefCheck[],
 ): Promise<NextResponse | null> {
   for (const check of checks) {
     if (!check.id) continue;
@@ -110,7 +150,7 @@ export async function validateCrossRefs(
     if (!record) {
       return NextResponse.json(
         { error: `${check.label} not found (id: ${check.id})` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -119,7 +159,7 @@ export async function validateCrossRefs(
         {
           error: `${check.label} does not belong to your organization`,
         },
-        { status: 403 }
+        { status: 403 },
       );
     }
   }
@@ -137,14 +177,14 @@ export async function validateCrossRefs(
  */
 export function assertOwnership(
   guard: AuthUser,
-  recordOrgId: string
+  recordOrgId: string,
 ): NextResponse | null {
   if (isSuperAdmin(guard)) return null;
 
   if (recordOrgId !== guard.organizationId) {
     return NextResponse.json(
       { error: "Forbidden — this record belongs to another organization" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 

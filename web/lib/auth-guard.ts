@@ -13,6 +13,8 @@ export type AuthUser = {
   organizationId: string | null;
   campusId: number | null;
   membershipId: number | null;
+  organizationStructure: "SINGLE" | "MULTIPLE" | null;
+  unitPath: string | null;
 };
 
 /**
@@ -47,6 +49,8 @@ export async function requireAuth(): Promise<AuthUser | NextResponse> {
     );
   }
 
+  const orgStructure = (user.organizationStructure as string) ?? null;
+
   return {
     id: parseInt(user.id as string, 10),
     email: user.email as string,
@@ -55,6 +59,8 @@ export async function requireAuth(): Promise<AuthUser | NextResponse> {
     organizationId,
     campusId: user.campusId ? Number(user.campusId) : null,
     membershipId: user.membershipId ? Number(user.membershipId) : null,
+    organizationStructure: orgStructure === "SINGLE" || orgStructure === "MULTIPLE" ? orgStructure : null,
+    unitPath: (user.unitPath as string) ?? null,
   };
 }
 
@@ -70,6 +76,7 @@ export async function requireVerifiedAuth(): Promise<AuthUser | NextResponse> {
   }
 
   const user = session.user as Record<string, unknown>;
+  const orgStructure = (user.organizationStructure as string) ?? null;
 
   return {
     id: parseInt(user.id as string, 10),
@@ -79,6 +86,8 @@ export async function requireVerifiedAuth(): Promise<AuthUser | NextResponse> {
     organizationId: user.organizationId ? String(user.organizationId) : null,
     campusId: user.campusId ? Number(user.campusId) : null,
     membershipId: user.membershipId ? Number(user.membershipId) : null,
+    organizationStructure: orgStructure === "SINGLE" || orgStructure === "MULTIPLE" ? orgStructure : null,
+    unitPath: (user.unitPath as string) ?? null,
   };
 }
 
