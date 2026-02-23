@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/lib/generated/prisma";
 import { resolveBankAccountsBatch } from "./challan-routing.service";
+import { emit } from "@/lib/events";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -92,6 +93,15 @@ export async function runMonthlyPosting(params: PostingParams): Promise<PostingR
       },
     });
 
+    emit("FeePostingCompleted", organizationId, {
+      postingRunId: runId,
+      month,
+      year,
+      totalStudents: result.totalStudents,
+      totalChallans: result.totalChallans,
+      totalAmount: result.totalAmount,
+    }, userId).catch(() => {});
+
     return {
       postingRunId: runId,
       ...result,
@@ -108,6 +118,13 @@ export async function runMonthlyPosting(params: PostingParams): Promise<PostingR
         errorMessage: message,
       },
     });
+
+    emit("FeePostingFailed", organizationId, {
+      postingRunId: runId,
+      month,
+      year,
+      errorMessage: message,
+    }, userId).catch(() => {});
 
     return {
       postingRunId: runId,

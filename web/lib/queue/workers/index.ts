@@ -7,6 +7,12 @@ import { startChallanPdfWorker } from "./challan-pdf.worker";
 import { startReportWorker } from "./report.worker";
 import { startBulkSmsWorker } from "./bulk-sms.worker";
 import { startImportWorker } from "./import.worker";
+import { startFinanceWorker } from "./finance.worker";
+import { startPromotionWorker } from "./promotion.worker";
+import { startReminderWorker } from "./reminder.worker";
+import { startSystemWorker } from "./system.worker";
+import { startEventHandlerWorker } from "./event-handler.worker";
+import { startWebhookWorker } from "./webhook.worker";
 
 let started = false;
 
@@ -19,14 +25,31 @@ export function startWorkers(): void {
   started = true;
 
   console.log("[Workers] Bootstrapping background job workers…");
+
+  /* Messaging workers */
   startEmailWorker();
   startOtpWorker();
   startSmsWorker();
   startWhatsAppWorker();
   startNotificationWorker();
   startChallanPdfWorker();
-  startReportWorker();
   startBulkSmsWorker();
   startImportWorker();
-  console.log("[Workers] All workers started.");
+
+  /* Domain workers */
+  startFinanceWorker();
+  startPromotionWorker();
+  startReminderWorker();
+  startReportWorker();
+
+  /* Payment gateway webhook worker */
+  startWebhookWorker();
+
+  /* Event-driven architecture worker */
+  startEventHandlerWorker();
+
+  /* System maintenance worker */
+  startSystemWorker();
+
+  console.log("[Workers] All workers started (15 queues).");
 }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { PaymentChannel, Prisma } from "@/lib/generated/prisma";
+import { emit } from "@/lib/events";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -171,13 +172,26 @@ export async function reconcilePayment(
 
     await adjustSummary(tx, challan.studentId, organizationId, challan.campusId, "CREDIT", paymentAmt);
 
-    return {
+    const result: ReconciliationResult = {
       paymentRecordId: payment.id,
       challanId: challan.id,
       challanStatus: newStatus,
       newPaidAmount,
       ledgerEntryId: ledgerEntry.id,
     };
+
+    emit("PaymentReconciled", organizationId, {
+      paymentRecordId: payment.id,
+      challanId: challan.id,
+      studentId: challan.studentId,
+      campusId: challan.campusId,
+      amount: paymentAmt,
+      challanStatus: newStatus,
+      newPaidAmount,
+      ledgerEntryId: ledgerEntry.id,
+    }).catch(() => {});
+
+    return result;
   });
 }
 
@@ -336,6 +350,14 @@ export async function reversePayment(
     if (studentId && campusId) {
       await adjustSummary(tx, studentId, organizationId, campusId, "DEBIT", refundAmt);
     }
+
+    emit("PaymentReversed", organizationId, {
+      paymentRecordId: payment.id,
+      challanId: payment.challanId ?? 0,
+      studentId: studentId ?? 0,
+      amount: refundAmt,
+      reason,
+    }).catch(() => {});
 
     return { ledgerEntryId: ledgerEntry.id };
   });

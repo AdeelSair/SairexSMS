@@ -11,6 +11,10 @@ export interface EnqueueOptions {
   priority?: number;
   delay?: number;
   scheduledAt?: Date;
+  idempotencyKey?: string;
+  referenceId?: string;
+  referenceType?: string;
+  maxAttempts?: number;
 }
 
 /**
@@ -19,17 +23,34 @@ export interface EnqueueOptions {
  *
  * If Redis is unavailable, the Postgres record is still created
  * (status PENDING) so a recovery sweep can pick it up later.
+ *
+ * If an idempotencyKey is supplied and a non-terminal job already
+ * exists with that key, returns the existing job ID (no duplicate).
  */
 export async function enqueue(opts: EnqueueOptions): Promise<string> {
+  if (opts.idempotencyKey) {
+    const existing = await prisma.job.findUnique({
+      where: { idempotencyKey: opts.idempotencyKey },
+      select: { id: true, status: true },
+    });
+    if (existing && !["FAILED", "DEAD"].includes(existing.status)) {
+      return existing.id;
+    }
+  }
+
   const job = await prisma.job.create({
     data: {
       type: opts.type,
       queue: opts.queue,
       payload: opts.payload,
       priority: opts.priority ?? 0,
+      maxAttempts: opts.maxAttempts ?? 3,
       scheduledAt: opts.scheduledAt ?? null,
       userId: opts.userId ?? null,
       organizationId: opts.organizationId ?? null,
+      idempotencyKey: opts.idempotencyKey ?? null,
+      referenceId: opts.referenceId ?? null,
+      referenceType: opts.referenceType ?? null,
     },
   });
 
@@ -38,6 +59,10 @@ export async function enqueue(opts: EnqueueOptions): Promise<string> {
       jobId: job.id,
       priority: opts.priority,
     };
+
+    if (opts.maxAttempts) {
+      bullOpts.attempts = opts.maxAttempts;
+    }
 
     if (opts.delay) {
       bullOpts.delay = opts.delay;
@@ -53,4 +78,65 @@ export async function enqueue(opts: EnqueueOptions): Promise<string> {
   }
 
   return job.id;
+}
+
+/**
+ * Update progress (0–100) on a running job. Workers should call
+ * this periodically during long-running operations.
+ */
+export async function updateJobProgress(jobId: string, progress: number): Promise<void> {
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { progress: Math.min(100, Math.max(0, Math.round(progress))) },
+  });
+}
+
+/**
+ * Mark a job as completed with optional result data.
+ */
+export async function completeJob(jobId: string, result?: Record<string, unknown>): Promise<void> {
+  await prisma.job.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      progress: 100,
+      completedAt: new Date(),
+      error: null,
+      result: result ?? undefined,
+    },
+  });
+}
+
+/**
+ * Mark a job as failed. If attempts are exhausted, marks as DEAD.
+ */
+export async function failJob(
+  jobId: string,
+  error: string,
+  attemptsMade: number,
+  maxAttempts: number,
+): Promise<void> {
+  await prisma.job.update({
+    where: { id: jobId },
+    data: {
+      status: attemptsMade >= maxAttempts ? "DEAD" : "FAILED",
+      failedAt: new Date(),
+      error,
+      attempts: attemptsMade,
+    },
+  });
+}
+
+/**
+ * Transition a job to PROCESSING state at the start of execution.
+ */
+export async function startJob(jobId: string, attemptsMade: number): Promise<void> {
+  await prisma.job.update({
+    where: { id: jobId },
+    data: {
+      status: "PROCESSING",
+      startedAt: new Date(),
+      attempts: attemptsMade,
+    },
+  });
 }
