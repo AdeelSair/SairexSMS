@@ -94,6 +94,42 @@ async function main() {
   });
   console.log(`Membership  : ${membership.role} in ${org.displayName}`);
 
+  // 5. Upsert a default city for the organization
+  let city = await prisma.city.findFirst({
+    where: { organizationId: org.id, name: "Lahore" },
+  });
+  if (!city) {
+    city = await prisma.city.create({
+      data: {
+        name: "Lahore",
+        unitCode: "LHR",
+        organizationId: org.id,
+      },
+    });
+  }
+  console.log(`City        : "${city.name}" (id: ${city.id})`);
+
+  // 6. Upsert a default campus for the organization
+  let campus = await prisma.campus.findFirst({
+    where: { campusCode: "MAIN" },
+  });
+  if (!campus) {
+    campus = await prisma.campus.create({
+      data: {
+        organizationId: org.id,
+        name: "Main Campus",
+        campusCode: "MAIN",
+        campusSlug: "main-campus",
+        unitCode: "MAIN",
+        fullUnitPath: "ORG-00001-LHR-MAIN",
+        cityId: city.id,
+        isMainCampus: true,
+        status: "ACTIVE",
+      },
+    });
+  }
+  console.log(`Campus      : "${campus.name}" (id: ${campus.id}, code: ${campus.campusCode})`);
+
   console.log("\n========================================");
   console.log("  LOGIN CREDENTIALS");
   console.log("========================================");

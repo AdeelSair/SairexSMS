@@ -1,10 +1,12 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { navigation } from "@/lib/config/theme";
+import { isSimpleMode, resolveOrganizationMode } from "@/lib/system/mode.service";
 import { SidebarNav } from "./SidebarNav";
 import LogoutButton from "./LogoutButton";
 import { MobileSidebar } from "./MobileSidebar";
 import { ThemeToggle } from "./ThemeToggle";
+import { ModeToggleButton } from "./ModeToggleButton";
 
 const FOOTER_NAV_GROUPS = [
   {
@@ -45,6 +47,18 @@ export default async function AdminLayout({
   const userEmail = user.email || "";
   const displayRole = user.platformRole || user.role;
   const userRole = displayRole?.replace("_", " ") || "Admin";
+  const orgMode = user.organizationId
+    ? await resolveOrganizationMode(user.organizationId)
+    : { mode: "PRO" as const, isSimple: false };
+  const simpleMode = isSimpleMode(orgMode.mode);
+  const filteredNavigation = simpleMode
+    ? navigation
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => !item.proOnly),
+        }))
+        .filter((group) => group.items.length > 0)
+    : navigation;
 
   return (
     <div className="flex h-screen flex-col md:flex-row">
@@ -55,7 +69,7 @@ export default async function AdminLayout({
           <span className="text-sidebar-primary">SMS</span>
         </h1>
         <MobileSidebar
-          groups={navigation}
+          groups={filteredNavigation}
           footerGroups={FOOTER_NAV_GROUPS}
           userEmail={userEmail}
           userRole={userRole}
@@ -77,7 +91,7 @@ export default async function AdminLayout({
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <SidebarNav groups={navigation} />
+          <SidebarNav groups={filteredNavigation} />
         </nav>
 
         {/* Footer: user info + actions */}
@@ -90,6 +104,9 @@ export default async function AdminLayout({
           </div>
           <SidebarNav groups={FOOTER_NAV_GROUPS} />
           <LogoutButton />
+          {user.organizationId && (
+            <ModeToggleButton currentMode={orgMode.mode} />
+          )}
           <div className="px-1 pt-2">
             <ThemeToggle />
           </div>

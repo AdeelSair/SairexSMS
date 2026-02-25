@@ -13,6 +13,7 @@ import { startReminderWorker } from "./reminder.worker";
 import { startSystemWorker } from "./system.worker";
 import { startEventHandlerWorker } from "./event-handler.worker";
 import { startWebhookWorker } from "./webhook.worker";
+import { logger } from "@/lib/logger";
 
 let started = false;
 
@@ -24,7 +25,7 @@ export function startWorkers(): void {
   if (started) return;
   started = true;
 
-  console.log("[Workers] Bootstrapping background job workers…");
+  logger.info("Bootstrapping background job workers…");
 
   /* Messaging workers */
   startEmailWorker();
@@ -51,5 +52,5 @@ export function startWorkers(): void {
   /* System maintenance worker */
   startSystemWorker();
 
-  console.log("[Workers] All workers started (15 queues).");
+  logger.info({ totalQueues: 15 }, "All workers started");
 }

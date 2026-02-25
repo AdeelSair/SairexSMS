@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthSessionProvider } from "@/components/session-provider";
+import { AppQueryProvider } from "@/components/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
@@ -35,17 +36,19 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <AuthSessionProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <TooltipProvider delayDuration={300}>
-              {children}
-              <Toaster richColors position="top-right" />
-            </TooltipProvider>
-          </ThemeProvider>
+          <AppQueryProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="light"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <TooltipProvider delayDuration={300}>
+                {children}
+                <Toaster richColors position="top-right" />
+              </TooltipProvider>
+            </ThemeProvider>
+          </AppQueryProvider>
         </AuthSessionProvider>
       </body>
     </html>

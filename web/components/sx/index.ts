@@ -15,6 +15,8 @@ export {
 } from "./sx-status-badge";
 
 export { SxDataTable, type SxColumn } from "./sx-data-table";
+export { SxLimitMeter } from "./sx-limit-meter";
+export { PlanUsageCard } from "./plan-usage-card";
 
 export {
   SxFormLayout,

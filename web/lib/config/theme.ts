@@ -75,6 +75,7 @@ export interface NavItem {
   label: string;
   href: string;
   icon: string; // lucide icon name
+  proOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -92,16 +93,28 @@ export const navigation: NavGroup[] = [
   {
     label: "Core Setup",
     items: [
-      { label: "Organizations", href: "/admin/organizations", icon: "Building2" },
-      { label: "Geo Hierarchy", href: "/admin/regions", icon: "Map" },
-      { label: "Campuses", href: "/admin/campuses", icon: "School" },
+      { label: "Organizations", href: "/admin/organizations", icon: "Building2", proOnly: true },
+      { label: "Geo Hierarchy", href: "/admin/regions", icon: "Map", proOnly: true },
+      { label: "Campuses", href: "/admin/campuses", icon: "School", proOnly: true },
+    ],
+  },
+  {
+    label: "Academics",
+    items: [
+      { label: "Academic Years", href: "/admin/academic-years", icon: "CalendarRange" },
+      { label: "Classes & Sections", href: "/admin/classes", icon: "Layers" },
+      { label: "Enrollments", href: "/admin/enrollments", icon: "ClipboardCheck" },
+      { label: "Attendance", href: "/admin/attendance", icon: "ClipboardList" },
     ],
   },
   {
     label: "Management",
     items: [
       { label: "Students", href: "/admin/students", icon: "GraduationCap" },
+      { label: "Payments", href: "/admin/payments", icon: "HandCoins" },
       { label: "Fee Module", href: "/admin/finance", icon: "Wallet" },
+      { label: "Finance Dashboard", href: "/admin/finance/dashboard", icon: "BarChart3", proOnly: true },
+      { label: "Monthly Posting", href: "/admin/finance/posting", icon: "CalendarClock", proOnly: true },
     ],
   },
   {
@@ -109,19 +122,19 @@ export const navigation: NavGroup[] = [
     items: [
       { label: "Users & Invites", href: "/admin/users", icon: "Users" },
       { label: "Audit Log", href: "/admin/audit", icon: "ScrollText" },
-      { label: "Access Coverage", href: "/admin/analytics/access-coverage", icon: "BarChart3" },
+      { label: "Access Coverage", href: "/admin/analytics/access-coverage", icon: "BarChart3", proOnly: true },
     ],
   },
   {
     label: "System",
     items: [
-      { label: "Job Monitor", href: "/admin/jobs", icon: "Activity" },
+      { label: "Job Monitor", href: "/admin/jobs", icon: "Activity", proOnly: true },
     ],
   },
   {
     label: "Development",
     items: [
-      { label: "Dev Tools", href: "/admin/dev-tools", icon: "Wrench" },
+      { label: "Dev Tools", href: "/admin/dev-tools", icon: "Wrench", proOnly: true },
     ],
   },
 ];

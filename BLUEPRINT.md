@@ -1,6 +1,6 @@
 # SAIREX SMS — Full Project Blueprint (AI Reference)
 
-> **Last updated:** 2026-02-20
+> **Last updated:** 2026-02-25
 > **Purpose:** Canonical reference for any AI assistant continuing development on this project.
 
 ---
@@ -16,16 +16,26 @@
 7. [Onboarding Flow](#7-onboarding-flow)
 8. [API Routes Reference](#8-api-routes-reference)
 9. [Background Job System](#9-background-job-system)
-10. [PDF Generation](#10-pdf-generation)
-11. [UI Component System](#11-ui-component-system)
-12. [Validation Layer](#12-validation-layer)
-13. [Admin Pages](#13-admin-pages)
-14. [Navigation & Sidebar](#14-navigation--sidebar)
-15. [External Services](#15-external-services)
-16. [Environment Variables](#16-environment-variables)
-17. [Scripts & Tooling](#17-scripts--tooling)
-18. [Known Issues & Technical Debt](#18-known-issues--technical-debt)
-19. [Coding Standards (Enforced Rules)](#19-coding-standards-enforced-rules)
+10. [Event-Driven Architecture](#10-event-driven-architecture)
+11. [Financial Engine](#11-financial-engine)
+12. [Academic Engine](#12-academic-engine)
+13. [Adoption Layer](#13-adoption-layer)
+14. [Payment Gateway Integration](#14-payment-gateway-integration)
+15. [Chain Governance (Master Control Panel)](#15-chain-governance-master-control-panel)
+16. [Launch Readiness](#16-launch-readiness)
+17. [PDF Generation](#17-pdf-generation)
+18. [UI Component System](#18-ui-component-system)
+19. [Validation Layer](#19-validation-layer)
+20. [Admin Pages](#20-admin-pages)
+21. [Navigation & Sidebar](#21-navigation--sidebar)
+22. [External Services](#22-external-services)
+23. [Environment Variables](#23-environment-variables)
+24. [Scripts & Tooling](#24-scripts--tooling)
+25. [Enterprise Media Asset System](#25-enterprise-media-asset-system)
+26. [Registration Certificate PDF System](#26-registration-certificate-pdf-system)
+27. [Known Issues & Technical Debt](#27-known-issues--technical-debt)
+28. [Coding Standards (Enforced Rules)](#28-coding-standards-enforced-rules)
+29. [Phase 8 Completion + Phase 9 Revenue Optimization (Step 1)](#29-phase-8-completion--phase-9-revenue-optimization-step-1)
 
 ---
 
@@ -34,12 +44,19 @@
 **SAIREX SMS** (Smart Management System) is an enterprise multi-tenant SaaS ERP for educational institutions (schools, colleges, academies, universities). It handles:
 
 - **Organization onboarding** — multi-step registration with identity, legal, address, branding, and OTP verification
-- **Multi-campus management** — organizations can have regional offices and multiple campuses
-- **Student management** — admission, enrollment, grade tracking
-- **Fee management** — fee heads, structures, challan generation, payment recording, PDF challans
-- **User management** — RBAC with invites, role assignment, campus-level permissions
-- **Background jobs** — async email, SMS, WhatsApp, PDF generation, bulk operations, data import
-- **Dev tools** — super admin utilities for development phase
+- **Multi-campus management** — hierarchical structure: Organization → Region → SubRegion → Zone → Campus
+- **Student management** — admission, year-aware enrollment, promotion, transfer
+- **Academic engine** — academic years, classes, sections, attendance, exams, results, grading, promotion
+- **Fee management** — fee heads, structures, automated posting, challan generation, bank routing, reconciliation
+- **Financial ledger** — double-sided ledger, balance computation, aging, defaulter detection
+- **Payment gateway integration** — EasyPaisa, JazzCash, 1Bill, Stripe adapters with webhook processing
+- **Automated reminders** — multi-channel (SMS/WhatsApp) reminders triggered by aging, with payment links
+- **User management** — RBAC with invites, role assignment, campus-level permissions, phone-first auth
+- **Background jobs** — 15 BullMQ queues for async email, SMS, WhatsApp, PDF, finance, promotion, events
+- **Event-driven architecture** — domain event bus with typed payloads, sync/async handlers, persisted event log
+- **Adoption layer** — passwordless phone auth, QR token infrastructure, guided setup wizard, role-based dashboard
+- **Chain governance** — master control panel for 20+ campus chains with health scoring, policy enforcement, campus locks
+- **Launch readiness** — feature gating (internal FREE/BASIC/PRO/ENTERPRISE + public STARTER/PROFESSIONAL/ENTERPRISE), pricing architecture, trials, encryption, rate limiting, health checks
 
 **Domain:** `sairex-sms.com`
 **Brand:** Sairex Technologies
@@ -62,13 +79,14 @@
 | Styling | Tailwind CSS v4 | ^4 |
 | UI Library | Shadcn UI + custom Sx components | ^3.8.5 |
 
-### Background Jobs
+### Background Jobs & Events
 
 | Component | Technology | Version |
 |-----------|-----------|---------|
 | Queue Engine | BullMQ | ^5.69.3 |
 | Redis Client | ioredis | ^5.9.3 |
 | Redis Server | Memurai (Windows, Redis 7.2.5 compat) | local |
+| Event IDs | @paralleldrive/cuid2 | latest |
 
 ### External Services
 
@@ -76,9 +94,10 @@
 |---------|-----------|---------|
 | Email | Nodemailer → Titan Email SMTP | Transactional email |
 | SMS | Axios → Veevo Tech API | SMS delivery |
-| WhatsApp | whatsapp-web.js (Puppeteer) | WhatsApp messaging |
+| WhatsApp | whatsapp-web.js (Puppeteer) | WhatsApp messaging (dev); WhatsApp Cloud API (production) |
 | PDF | @react-pdf/renderer (certificates) + PDFKit (challans) | Registration certificates, challans, reports |
 | File Storage | AWS S3 + sharp (WEBP optimization) | Logo & media asset upload with variants |
+| Encryption | Node.js crypto (AES-256-GCM) | Sensitive config field encryption |
 
 ### Forms & Validation
 
@@ -98,19 +117,9 @@ c:\SairexSMS\
 │   ├── sairex-component-standards.mdc
 │   └── sairex-api-patterns.mdc
 ├── .nvmrc                       # Node 22.22.0
-├── .gitignore
 ├── prisma/
 │   └── schema.prisma            # Single source of truth for DB schema
 ├── backend/                     # Python scripts (legacy/utility)
-│   ├── add_student.py
-│   ├── admit_student.py
-│   ├── create_fee_structure.py
-│   ├── create_school.py
-│   ├── generate_challan.py
-│   ├── notification_service.py
-│   ├── onboard_saas.py
-│   ├── pay_challan.py
-│   └── seed_fees.py
 └── web/                         # Next.js application (main codebase)
     ├── package.json
     ├── tsconfig.json
@@ -118,108 +127,67 @@ c:\SairexSMS\
     ├── auth.ts                  # NextAuth configuration
     ├── auth.config.ts           # NextAuth edge config
     ├── instrumentation.ts       # Worker bootstrap hook
-    ├── app/                     # Next.js App Router
-    │   ├── layout.tsx           # Root layout (fonts, theme, toaster)
-    │   ├── page.tsx             # Landing page
+    ├── app/
+    │   ├── layout.tsx
+    │   ├── page.tsx
     │   ├── globals.css
-    │   ├── (auth)/              # Auth route group
-    │   │   ├── layout.tsx
-    │   │   ├── login/page.tsx
-    │   │   ├── signup/page.tsx
-    │   │   ├── forgot-password/page.tsx
-    │   │   ├── reset-password/page.tsx
-    │   │   └── verify-email/page.tsx
-    │   ├── onboarding/          # Multi-step org onboarding
-    │   │   ├── layout.tsx
-    │   │   ├── context.tsx      # OnboardingProvider (client state)
-    │   │   ├── identity/page.tsx
-    │   │   ├── legal/page.tsx
-    │   │   ├── contact-address/page.tsx
-    │   │   ├── branding/page.tsx
-    │   │   ├── preview/page.tsx
-    │   │   └── confirmation/page.tsx
-    │   ├── admin/               # Protected admin panel
-    │   │   ├── layout.tsx       # Sidebar + top bar shell
-    │   │   ├── SidebarNav.tsx
-    │   │   ├── MobileSidebar.tsx
-    │   │   ├── ThemeToggle.tsx
-    │   │   ├── LogoutButton.tsx
-    │   │   ├── dashboard/page.tsx
-    │   │   ├── organizations/page.tsx
-    │   │   ├── regions/page.tsx
-    │   │   ├── campuses/page.tsx
-    │   │   ├── students/page.tsx
-    │   │   ├── users/page.tsx
-    │   │   ├── finance/page.tsx
-    │   │   ├── finance/challans/[id]/print/page.tsx
-    │   │   ├── finance/challans/[id]/print/PrintControls.tsx
-    │   │   ├── jobs/page.tsx
-    │   │   ├── dev-tools/page.tsx
-    │   │   └── change-password/page.tsx
-    │   └── api/                 # API routes (see §8)
-    │       ├── auth/
-    │       ├── onboarding/
-    │       ├── organizations/
-    │       ├── regions/
-    │       ├── campuses/
-    │       ├── students/
-    │       ├── invites/
-    │       ├── finance/
-    │       ├── jobs/
-    │       ├── cron/
-    │       └── dev-tools/
+    │   ├── (auth)/              # Auth route group (login, signup, forgot/reset password, verify)
+    │   ├── onboarding/          # Multi-step org onboarding (identity, legal, contact-address, branding, preview, confirmation)
+    │   ├── admin/               # Protected admin panel (dashboard, orgs, regions, campuses, students, users, finance, jobs, audit, dev-tools)
+    │   └── api/
+    │       ├── auth/            # NextAuth + signup, verify, password flows
+    │       ├── onboarding/      # Onboarding steps + OTP verification + certificate
+    │       ├── organizations/   # Org CRUD + contacts, addresses, banks
+    │       ├── regions/         # Geo hierarchy CRUD
+    │       ├── campuses/        # Campus CRUD
+    │       ├── students/        # Student admission
+    │       ├── invites/         # Invite system
+    │       ├── memberships/     # Membership management
+    │       ├── unit-profiles/   # Unit profile CRUD
+    │       ├── finance/         # Fee heads, structures, challans
+    │       ├── jobs/            # Job monitor + enqueue endpoints
+    │       ├── cron/            # Scheduled triggers
+    │       ├── health/          # Health check endpoints (db, redis)
+    │       ├── dashboard/       # Dashboard action registry
+    │       ├── qr/              # QR token resolution
+    │       ├── payments/        # Payment initiation, webhooks, config
+    │       ├── reminders/       # Reminder templates
+    │       ├── governance/      # Control policy, dashboard, campus-lock, health-scores, fee-templates
+    │       ├── webhooks/        # External webhooks (WhatsApp delivery)
+    │       ├── dev-tools/       # SUPER_ADMIN utilities
+    │       └── media/           # Media upload (logo, assets)
     ├── components/
-    │   ├── sx/                  # Custom SAIREX design system (see §11)
-    │   │   ├── index.ts
-    │   │   ├── sx-button.tsx
-    │   │   ├── sx-page-header.tsx
-    │   │   ├── sx-status-badge.tsx
-    │   │   ├── sx-data-table.tsx
-    │   │   ├── sx-form-section.tsx
-    │   │   ├── sx-amount.tsx
-    │   │   └── sx-profile-header.tsx
+    │   ├── sx/                  # Custom SAIREX design system
     │   ├── ui/                  # Shadcn UI primitives
-    │   │   ├── button.tsx, input.tsx, select.tsx, dialog.tsx,
-    │   │   ├── form.tsx, card.tsx, badge.tsx, tabs.tsx,
-    │   │   ├── table.tsx, textarea.tsx, checkbox.tsx,
-    │   │   ├── avatar.tsx, dropdown-menu.tsx, sheet.tsx,
-    │   │   ├── scroll-area.tsx, separator.tsx, skeleton.tsx,
-    │   │   ├── sonner.tsx, tooltip.tsx, label.tsx, switch.tsx
-    │   │   └── ...
     │   └── theme-provider.tsx
     ├── lib/
     │   ├── prisma.ts            # Singleton PrismaClient
     │   ├── api-client.ts        # Client-side API wrapper (discriminated union)
     │   ├── auth-guard.ts        # requireAuth, requireRole, isSuperAdmin
     │   ├── tenant.ts            # scopeFilter, resolveOrgId, validateCrossRefs, assertOwnership
-    │   ├── email.ts             # Nodemailer transport + sendEmail, sendVerificationEmail
+    │   ├── feature-gate.ts      # Plan-based feature gating (assertFeatureEnabled)
+    │   ├── encryption.ts        # AES-256-GCM encrypt/decrypt for secrets
+    │   ├── rate-limit.ts        # Sliding-window rate limiter
+    │   ├── security.ts          # Tenant assertion, webhook replay protection, security headers
+    │   ├── email.ts             # Nodemailer transport
     │   ├── whatsapp.ts          # whatsapp-web.js client
     │   ├── notifications.ts     # notifyParent → enqueues NOTIFICATION job
-    │   ├── id-generators.ts     # generateOrganizationId (ORG-XXXXX, race-safe sequence)
-    │   ├── theme-utils.ts       # Theme helpers
-    │   ├── utils.ts             # cn() (clsx + tailwind-merge)
+    │   ├── id-generators.ts     # generateOrganizationId (ORG-XXXXX)
+    │   ├── unit-code.ts         # Unit code generation + fullUnitPath
     │   ├── config/
-    │   │   └── theme.ts         # Brand, design tokens, sidebar navigation
+    │   │   └── theme.ts
     │   ├── data/
-    │   │   └── pakistan-geo.ts   # Province → District → Tehsil → City cascading data
-    │   ├── validations/         # Zod schemas (see §12)
+    │   │   └── pakistan-geo.ts
+    │   ├── validations/         # Zod schemas
+    │   ├── pdf/                 # Server-side PDF generation
+    │   ├── queue/               # BullMQ job system (15 queues)
+    │   │   ├── connection.ts    # Redis singleton
+    │   │   ├── queues.ts        # Queue constants + factory
+    │   │   ├── enqueue.ts       # Dual-write (Postgres + BullMQ)
+    │   │   ├── recovery.ts      # Stuck/failed job recovery
     │   │   ├── index.ts
-    │   │   ├── onboarding.ts
-    │   │   ├── organization.ts
-    │   │   ├── organization-address.ts
-    │   │   ├── organization-contact.ts
-    │   │   └── signup.ts
-    │   ├── pdf/                 # Server-side PDF generation (see §10)
-    │   │   ├── index.ts
-    │   │   ├── challan-pdf.ts
-    │   │   └── report-pdf.ts
-    │   ├── queue/               # BullMQ job system (see §9)
-    │   │   ├── connection.ts
-    │   │   ├── queues.ts
-    │   │   ├── enqueue.ts
-    │   │   ├── index.ts
-    │   │   └── workers/
-    │   │       ├── index.ts
+    │   │   └── workers/         # 15 queue workers
+    │   │       ├── index.ts     # Bootstrap all workers
     │   │       ├── email.worker.ts
     │   │       ├── otp.worker.ts
     │   │       ├── sms.worker.ts
@@ -228,19 +196,65 @@ c:\SairexSMS\
     │   │       ├── challan-pdf.worker.ts
     │   │       ├── report.worker.ts
     │   │       ├── bulk-sms.worker.ts
-    │   │       └── import.worker.ts
+    │   │       ├── import.worker.ts
+    │   │       ├── finance.worker.ts
+    │   │       ├── promotion.worker.ts
+    │   │       ├── reminder.worker.ts
+    │   │       ├── system.worker.ts
+    │   │       ├── webhook.worker.ts
+    │   │       └── event-handler.worker.ts
+    │   ├── events/              # Event-driven architecture
+    │   │   ├── bus.ts           # Event bus (dispatch, sync/async handlers)
+    │   │   ├── types.ts         # All domain event types + payload interfaces
+    │   │   ├── registry.ts      # Handler registration
+    │   │   └── index.ts
+    │   ├── finance/             # Financial engine services
+    │   │   ├── challan-routing.service.ts    # Bank auto-routing (campus → hierarchy)
+    │   │   ├── reconciliation.service.ts     # Payment reconciliation + ledger
+    │   │   ├── student-ledger.service.ts     # Balance computation, aging, defaulters
+    │   │   ├── fee-posting.service.ts        # Automated monthly/term fee posting
+    │   │   ├── defaulter.service.ts          # Defaulter & aging analytics
+    │   │   └── reminder-engine.service.ts    # Automated collection reminders
+    │   ├── academic/            # Academic engine services
+    │   │   ├── academic-year.service.ts      # Year lifecycle (DRAFT→ACTIVE→CLOSED)
+    │   │   ├── class-section.service.ts      # Year-aware class & section CRUD
+    │   │   ├── enrollment.service.ts         # Student enrollment + transfers
+    │   │   ├── attendance.service.ts         # Bulk attendance marking
+    │   │   ├── exam.service.ts              # Exam & result management
+    │   │   └── promotion.service.ts         # Academic year rollover + promotion
+    │   ├── adoption/            # Adoption layer services
+    │   │   ├── otp.service.ts               # Passwordless phone-first auth
+    │   │   ├── qr-token.service.ts          # QR token generation & resolution
+    │   │   ├── onboarding.service.ts        # Wizard step tracking
+    │   │   ├── bootstrap.service.ts         # Organization auto-setup
+    │   │   ├── dashboard.service.ts         # Role-based action dashboard
+    │   │   └── index.ts
+    │   ├── payments/            # Payment gateway abstraction
+    │   │   ├── gateway.interface.ts         # PaymentGatewayAdapter interface
+    │   │   ├── payment.service.ts           # Orchestration (initiate, webhook processing)
+    │   │   ├── adapters/
+    │   │   │   ├── manual.adapter.ts
+    │   │   │   ├── easypaisa.adapter.ts
+    │   │   │   ├── jazzcash.adapter.ts
+    │   │   │   ├── onebill.adapter.ts
+    │   │   │   └── stripe.adapter.ts
+    │   │   └── index.ts
+    │   ├── governance/          # Chain governance services
+    │   │   ├── control-policy.service.ts    # Policy enforcement + campus locks
+    │   │   ├── campus-health.service.ts     # Composite health score computation
+    │   │   ├── master-dashboard.service.ts  # Chain KPIs + campus comparison
+    │   │   └── index.ts
+    │   ├── analytics/           # BI & analytics
+    │   │   └── access-coverage.service.ts
     │   └── generated/
     │       └── prisma/          # Prisma generated client (gitignored)
     ├── scripts/
-    │   ├── seed-admin.ts        # Create root org, SUPER_ADMIN user, sequence
-    │   ├── start-workers.ts     # Standalone worker process for production
-    │   ├── test-api-security.ts
-    │   ├── test-password-flows.ts
-    │   └── test-signup-invites.ts
+    │   ├── seed-admin.ts
+    │   ├── seed-plan-features.ts   # Seed feature gating matrix
+    │   ├── start-workers.ts
+    │   └── test-*.ts
     └── public/
         └── generated/           # Runtime-generated PDFs
-            ├── challans/
-            └── reports/
 ```
 
 ---
@@ -251,12 +265,12 @@ c:\SairexSMS\
 
 ```prisma
 generator client {
-  provider = "prisma-client-py"          // Python client (backend scripts)
+  provider = "prisma-client-py"
 }
 
 generator jsClient {
-  provider = "prisma-client-js"          // JS client for Next.js
-  output   = "../web/lib/generated/prisma"  // Custom output for monorepo
+  provider = "prisma-client-js"
+  output   = "../web/lib/generated/prisma"
 }
 
 datasource db {
@@ -265,146 +279,165 @@ datasource db {
 }
 ```
 
-**Important:** The schema lives at `prisma/schema.prisma` (repo root), but the JS client is generated into `web/lib/generated/prisma/`. The `postinstall` script in `web/package.json` auto-generates it. The import in `web/lib/prisma.ts` is `from "@/lib/generated/prisma"`. A tsconfig path alias maps `@prisma/client` → `./lib/generated/prisma` for compatibility.
+**Important:** Schema at `prisma/schema.prisma` (repo root), JS client generated to `web/lib/generated/prisma/`. Import: `from "@/lib/generated/prisma"`.
 
-### Enums
+### Enums (35+)
 
-| Enum | Values |
-|------|--------|
-| `PlatformRole` | SUPER_ADMIN, SUPPORT |
-| `MembershipRole` | ORG_ADMIN, CAMPUS_ADMIN, TEACHER, ACCOUNTANT, PARENT, STAFF |
-| `MembershipStatus` | ACTIVE, INVITED, SUSPENDED |
-| `OrganizationCategory` | SCHOOL, COLLEGE, ACADEMY, INSTITUTE, UNIVERSITY, OTHERS |
-| `OrganizationStructure` | SINGLE, MULTIPLE |
-| `OrganizationStatus` | ACTIVE, SUSPENDED, ARCHIVED |
-| `OnboardingStep` | ORG_IDENTITY, LEGAL, CONTACT_ADDRESS, BRANDING, COMPLETED |
-| `AddressType` | HEAD_OFFICE, BILLING, CAMPUS, OTHER |
-| `UnitScopeType` | REGION, SUBREGION, CITY, ZONE, CAMPUS |
+| Category | Enum | Values |
+|----------|------|--------|
+| **Auth** | `PlatformRole` | SUPER_ADMIN, SUPPORT |
+| | `MembershipRole` | ORG_ADMIN, CAMPUS_ADMIN, TEACHER, ACCOUNTANT, PARENT, STAFF |
+| | `MembershipStatus` | ACTIVE, INVITED, SUSPENDED |
+| **Organization** | `OrganizationCategory` | SCHOOL, COLLEGE, ACADEMY, INSTITUTE, UNIVERSITY, OTHERS |
+| | `OrganizationStructure` | SINGLE, MULTIPLE |
+| | `OrganizationStatus` | ACTIVE, SUSPENDED, ARCHIVED |
+| | `OnboardingStep` | ORG_IDENTITY, LEGAL, CONTACT_ADDRESS, BRANDING, COMPLETED |
+| **Geo** | `UnitScopeType` | REGION, SUBREGION, CITY, ZONE, CAMPUS |
+| | `AddressType` | HEAD_OFFICE, BILLING, CAMPUS, OTHER |
+| **Finance** | `FinanceRoutingMode` | CAMPUS_PRIMARY, NEAREST_PARENT_PRIMARY |
+| | `ChallanStatus` | UNPAID, PARTIALLY_PAID, PAID, CANCELLED |
+| | `PaymentStatus` | PENDING, RECONCILED, FAILED, REFUNDED |
+| | `PaymentChannel` | CASH, BANK_TRANSFER, ONLINE, CHEQUE |
+| | `LedgerEntryType` | CHALLAN_CREATED, PAYMENT_RECEIVED, ADJUSTMENT, REFUND, WAIVER |
+| | `LedgerDirection` | DEBIT, CREDIT |
+| | `FeeFrequency` | MONTHLY, TERM, ANNUAL |
+| | `PostingRunStatus` | PENDING, PROCESSING, COMPLETED, FAILED |
+| | `PaymentGateway` | EASYPAISA, JAZZCASH, ONEBILL, KUICKPAY, STRIPE, MANUAL |
+| **Academic** | `AcademicYearStatus` | DRAFT, ACTIVE, CLOSED, ARCHIVED |
+| | `EnrollmentStatus` | ACTIVE, TRANSFERRED, WITHDRAWN, COMPLETED, REPEATED |
+| | `AttendanceStatus` | PRESENT, ABSENT, LATE, LEAVE, HALF_DAY |
+| | `ExamType` | UNIT_TEST, MID_TERM, FINAL, TERM, ANNUAL |
+| | `ExamStatus` | DRAFT, ACTIVE, LOCKED, PUBLISHED |
+| | `PromotionStatus` | PENDING, PROCESSING, COMPLETED, FAILED |
+| **Reminders** | `ReminderChannel` | SMS, WHATSAPP, EMAIL |
+| | `ReminderStatus` | SENT, FAILED, DELIVERED, READ |
+| | `ReminderTriggerType` | BEFORE_DUE, AFTER_DUE, PARTIAL_PAYMENT, FINAL_NOTICE, RECEIPT |
+| **Adoption** | `QrTokenType` | FEE_PAYMENT, PARENT_ACCESS, ADMISSION, ATTENDANCE, LOGIN |
+| **Governance** | `ControlMode` | CENTRALIZED, CAMPUS_AUTONOMOUS |
+| **Pricing** | `PlanType` | FREE, BASIC, PRO, ENTERPRISE |
+| **Media** | `MediaType` | LOGO, FAVICON, DOCUMENT |
+| | `MediaVariant` | ORIGINAL, SM, MD, LG, DARK, PRINT |
 
-### Models (18 total)
+### Models (55+)
 
 #### Identity & Auth
 
-| Model | Key Fields | Purpose |
-|-------|-----------|---------|
-| **User** | id (auto-int), email (unique), password, name, isActive, emailVerifiedAt, emailVerifyToken, emailVerifyExpires, platformRole?, tokenVersion | Global user identity. Platform role is optional (null = regular user). |
-| **VerificationCode** | id (cuid), userId, channel, target, codeHash (SHA-256), expiresAt, verified, verifiedAt, attempts, lockedUntil | OTP verification for email/mobile/WhatsApp during onboarding. Hashed codes, attempt tracking, lockout. |
-| **PasswordResetToken** | id, userId, token (unique), expiresAt, usedAt | One-time password reset tokens. |
+| Model | Purpose |
+|-------|---------|
+| **User** | Global user. Fields: email, password, phone, isPhoneVerified, platformRole. |
+| **VerificationCode** | OTP verification with SHA-256 hash, attempts, lockout. |
+| **PasswordResetToken** | One-time password reset tokens. |
+| **OtpSession** | Passwordless phone-first auth sessions. Fields: phone, codeHash, expiresAt, consumed, ipAddress, userAgent. |
 
 #### Organization & Structure
 
-| Model | Key Fields | Purpose |
-|-------|-----------|---------|
-| **OrganizationSequence** | id (default 1), lastValue | Race-safe auto-increment for ORG-XXXXX IDs. |
-| **Organization** | id (VarChar 11, e.g. "ORG-00001"), slug (unique), status, onboardingStep, organizationName, displayName, organizationCategory, organizationStructure, registrationNumber, taxNumber, establishedDate, address fields, contact fields, websiteUrl, logoUrl, createdByUserId | Tenant root entity. Contains all onboarding data (identity, legal, address, contact, branding) in flat columns. |
-| **OrganizationContact** | id, organizationId, name, designation, email, phone, isPrimary | Additional contacts for the organization. |
-| **OrganizationAddress** | id, organizationId, type (AddressType), country, province, city, area, postalCode, addressLine1/2, isPrimary | Multiple addresses per org (HQ, billing, campus, other). |
-| **OrganizationBank** | id, organizationId, accountTitle, bankName, branchName, accountNumber, iban, swiftCode, isPrimary | Bank accounts for fee collection. |
+| Model | Purpose |
+|-------|---------|
+| **OrganizationSequence** | Race-safe ORG-XXXXX ID generation. |
+| **Organization** | Tenant root. Flat table: identity, legal, address, contact, branding, financeRoutingMode. |
+| **OrganizationContact** | Additional contacts per org. |
+| **OrganizationAddress** | Multiple addresses per org (HQ, billing, campus). |
+| **OrganizationBank** | Bank accounts for fee collection. |
 
-#### Geographic Hierarchy (Region → SubRegion → City → Zone)
+#### Geographic Hierarchy
 
-| Model | Key Fields | Purpose |
-|-------|-----------|---------|
-| **Region** | id (cuid), name, **unitCode** (unique, e.g. `R01`) | Top-level geographic area (e.g. Punjab, Sindh). Optional. |
-| **SubRegion** | id (cuid), name, **unitCode** (e.g. `S01`), regionId? | Optional layer under Region (e.g. South Punjab). Code scoped per parent region. |
-| **City** | id (cuid), name, **unitCode** (unique, e.g. `LHR`, `ISB`) regionId?, subRegionId? | **Required for Campus.** Code derived from city name abbreviation. |
-| **Zone** | id (cuid), name, **unitCode** (e.g. `Z01`), cityId | Optional subdivision within a city. Code scoped per parent city. |
-| **Campus** | id, organizationId, name, campusCode (unique), campusSlug (unique), **unitCode** (e.g. `C01`), **fullUnitPath** (indexed, e.g. `R01-S02-LHR-Z01-C03`), address, cityId, zoneId?, ... | Operational unit. Code scoped per zone or city. fullUnitPath is the materialized hierarchy path. |
-| **UnitCodeSequence** | id (cuid), scopeType (UnitScopeType), scopeId?, lastValue | Race-safe atomic counter per (scopeType, scopeId) pair. |
-
-##### Unit Code System
-
-All geo entities and campuses receive auto-generated `unitCode` values:
-
-| Layer | Format | Example | Scope |
-|-------|--------|---------|-------|
-| Region | `R{nn}` | R01 | Global (root-level sequence) |
-| SubRegion | `S{nn}` | S03 | Per parent region |
-| City | 3-letter abbreviation | LHR, ISB, KHI | Unique globally (from known abbreviation table or name-derived) |
-| Zone | `Z{nn}` | Z02 | Per parent city |
-| Campus | `C{nn}` | C05 | Per zone (or city if no zone) |
-
-Generation uses atomic `upsert` + `increment` on `UnitCodeSequence` inside a Prisma `$transaction`, preventing race conditions. Implementation: `web/lib/unit-code.ts`.
-
-##### Materialized Unit Path (`fullUnitPath`)
-
-Campus stores a `fullUnitPath` field (indexed, `VARCHAR(50)`) that concatenates the unitCodes of its entire lineage:
-
-```
-Region → SubRegion → City → Zone → Campus
-R01    -  S02      -  LHR -  Z01 -  C03
-```
-
-Missing optional levels (Region, SubRegion, Zone) are skipped automatically. Examples:
-
-| Campus | fullUnitPath |
-|--------|-------------|
-| DHA Boys (Lahore, Zone 1) | `R01-S01-LHR-Z01-C01` |
-| Sahiwal (no zone) | `R01-S03-SWL-C01` |
-| Model Town (no subregion) | `R01-LHR-Z02-C01` |
-
-**Use cases:**
-- **Prefix filtering** — `WHERE fullUnitPath LIKE 'R01-S02%'` for instant hierarchical queries (no joins)
-- **Revenue routing** — fee challans, reports, dashboards
-- **RBAC scoping** — user assigned `R01-S02` → filter `WHERE fullUnitPath LIKE 'R01-S02%'`
-- **Audit safety** — historical financial records keep their path snapshot unchanged
-
-**Generation:** `buildFullUnitPath()` in `web/lib/unit-code.ts` walks up the hierarchy inside the same `$transaction` as campus creation. Path is computed once on create and recomputed only if the campus is moved.
+| Model | Purpose |
+|-------|---------|
+| **Region** | Top-level (e.g., Punjab). unitCode: `R01`. |
+| **SubRegion** | Optional under Region. unitCode: `S01`. |
+| **City** | Required for Campus. unitCode: `LHR`. |
+| **Zone** | Optional within City. unitCode: `Z01`. |
+| **Campus** | Operational unit. fullUnitPath: `R01-S02-LHR-Z01-C03`. |
+| **UnitCodeSequence** | Atomic counter per scope. |
+| **UnitProfile** | Extended campus profile (logo, address, banking identity). |
+| **UnitBankAccount** | Bank accounts per unit with primary enforcement. |
 
 #### RBAC
 
-| Model | Key Fields | Purpose |
-|-------|-----------|---------|
-| **Membership** | id, userId, organizationId, role (MembershipRole), status, campusId? | User-to-org-to-campus bridge. Unique on [userId, organizationId]. |
-| **Invitation** | id, email, organizationId, role, token (unique), invitedById, expiresAt, acceptedAt | Pending invitations. Token-based acceptance flow. |
+| Model | Purpose |
+|-------|---------|
+| **Membership** | User→Org→Campus bridge. Unique [userId, organizationId]. unitPath for hierarchical scoping. |
+| **Invitation** | Token-based pending invitations. |
 
-#### Students & Finance
+#### Students
 
-| Model | Key Fields | Purpose |
-|-------|-----------|---------|
-| **Student** | id, fullName, admissionNo (unique), grade, feeStatus, organizationId, campusId | Student record. |
-| **FeeHead** | id, organizationId, name, type, isSystemDefault | Fee category definitions (Tuition, Transport, etc.). |
-| **FeeStructure** | id, organizationId, campusId, feeHeadId, name, amount (Decimal), currency, frequency, applicableGrade, isActive | Pricing rules per campus/head/grade. |
-| **FeeChallan** | id, organizationId, campusId, studentId, challanNo (unique), issueDate, dueDate, totalAmount, paidAmount, status, paymentMethod, paidAt, generatedBy | Fee bill. Statuses: UNPAID, PAID, PARTIAL, OVERDUE. |
+| Model | Purpose |
+|-------|---------|
+| **Student** | Core student record. admissionNo (unique), grade, feeStatus. |
+| **StudentEnrollment** | Year-aware enrollment. Unique [studentId, academicYearId]. Links to class, section, campus. promotedFromId for history chain. |
+
+#### Finance
+
+| Model | Purpose |
+|-------|---------|
+| **FeeHead** | Fee category definitions (Tuition, Transport, etc.). |
+| **FeeStructure** | Pricing rules per campus/head/grade. frequency, startMonth, endMonth. |
+| **FeeChallan** | Fee bill. totalAmount, paidAmount, status, bankAccountId, month, year, feeStructureId. |
+| **PaymentRecord** | Raw incoming payments. gateway, gatewayRef, gatewayPayload. Unique [gateway, gatewayRef]. |
+| **LedgerEntry** | Accounting truth. direction (DEBIT/CREDIT), entryType, campusId, entryDate. |
+| **StudentFinancialSummary** | Materialized O(1) balance lookup. totalDebit, totalCredit, balance. |
+| **PostingRun** | Idempotent fee posting. Unique [organizationId, month, year]. |
+
+#### Academic
+
+| Model | Purpose |
+|-------|---------|
+| **AcademicYear** | Organization-scoped. status lifecycle (DRAFT→ACTIVE→CLOSED→ARCHIVED). Only one active per org. |
+| **Class** | Year-aware grade level. Unique [academicYearId, campusId, name]. |
+| **Section** | Operational classroom. capacity, classTeacherId. Unique [classId, name]. |
+| **Attendance** | Per student per day per section. Unique [enrollmentId, date]. |
+| **Subject** | Year-aware per class. Unique [academicYearId, classId, name]. |
+| **Exam** | Exam instance. examType, status lifecycle (DRAFT→ACTIVE→LOCKED→PUBLISHED). |
+| **ExamSubject** | Subject marks config for an exam. totalMarks, passingMarks. |
+| **StudentExamResult** | Marks per student per subject per exam. Unique [examId, subjectId, studentEnrollmentId]. |
+| **GradeScale** | Grade→percentage mapping per org. |
+| **PromotionRun** | Idempotent promotion. Unique [organizationId, fromAcademicYearId]. |
+
+#### Reminders & Messaging
+
+| Model | Purpose |
+|-------|---------|
+| **ReminderRule** | Configurable reminder triggers. triggerType, daysOffset, channel, templateKey, frequencyDays. |
+| **ReminderLog** | Prevents duplicates. Tracks deliveredAt, readAt, paymentLink. |
+| **MessageTemplate** | DB-stored message templates. Unique [organizationId, channel, templateKey]. |
+
+#### Adoption
+
+| Model | Purpose |
+|-------|---------|
+| **QrToken** | Secure token pointer for QR codes. type, referenceId, expiresAt, oneTimeUse, metadata. |
+| **OnboardingProgress** | Wizard step tracking. currentStep, completed. |
+| **DashboardAction** | Role-based action buttons. Unique [organizationId, role, actionKey]. |
+
+#### Payments
+
+| Model | Purpose |
+|-------|---------|
+| **OrganizationPaymentConfig** | Per-org gateway settings. primaryGateway, enabledJson, configJson. |
+
+#### Governance
+
+| Model | Purpose |
+|-------|---------|
+| **OrganizationControlPolicy** | CENTRALIZED vs CAMPUS_AUTONOMOUS per domain (fee, academic, messaging, posting). |
+| **FeeTemplate** | Head office-defined fee templates. Unique [organizationId, name]. |
+| **CampusHealthScore** | Materialized composite score. collectionRate, attendanceRate, academicScore, enrollmentGrowth, riskLevel. |
+| **CampusOperationalStatus** | Campus lock mechanism. isFinancialLocked, isAcademicLocked, lockReason. |
+
+#### Pricing & Feature Gating
+
+| Model | Purpose |
+|-------|---------|
+| **OrganizationPlan** | Plan assignment per org. planType, maxStudents, maxCampuses, expiresAt. |
+| **PlanFeature** | Feature matrix. Unique [planType, featureKey]. 11 features × 4 plans. |
 
 #### System
 
-| Model | Key Fields | Purpose |
-|-------|-----------|---------|
-| **Job** | id (cuid), type, queue, payload (Json), status, priority, attempts, maxAttempts, scheduledAt, startedAt, completedAt, failedAt, error, result (Json), organizationId?, userId? | Background job audit trail. Statuses: PENDING, PROCESSING, COMPLETED, FAILED, DEAD. |
-
-### Key Relationships
-
-```
-User 1──∞ Membership ∞──1 Organization
-User 1──∞ VerificationCode
-User 1──∞ PasswordResetToken
-User 1──∞ Invitation (invitedBy)
-User 1──∞ Job
-
-Organization 1──∞ Campus
-Organization 1──∞ OrganizationContact
-Organization 1──∞ OrganizationAddress
-Organization 1──∞ OrganizationBank
-Organization 1──∞ Student
-Organization 1──∞ FeeHead
-Organization 1──∞ FeeStructure
-Organization 1──∞ FeeChallan
-Organization 1──∞ Job
-
-Region 1──∞ SubRegion
-Region 1──∞ City
-SubRegion 1──∞ City
-City 1──∞ Zone
-City 1──∞ Campus
-Zone 1──∞ Campus
-
-Campus 1──∞ Student
-Campus 1──∞ FeeStructure
-Campus 1──∞ FeeChallan
-Student 1──∞ FeeChallan
-FeeHead 1──∞ FeeStructure
-```
+| Model | Purpose |
+|-------|---------|
+| **Job** | Background job audit trail. idempotencyKey, priority, queue, status, attempts, result. |
+| **DomainEventLog** | Persisted event store. eventType, payload (Json), processed. |
+| **MediaAsset** | Versioned media audit table. |
 
 ---
 
@@ -413,26 +446,23 @@ FeeHead 1──∞ FeeStructure
 ### Auth Stack
 
 - **NextAuth.js v5 (beta)** with Credentials provider and JWT strategy
-- **Prisma Adapter** (`@auth/prisma-adapter`) for DB persistence
 - **bcryptjs** for password hashing
+- **Passwordless phone auth** via OTP (SHA-256 hashed, rate-limited)
 
-### Auth Flow
+### Auth Flows
 
-1. **Signup** (`POST /api/auth/signup`):
-   - With `inviteToken`: creates user + membership, email auto-verified
-   - Without: creates user, sends verification email via background job
-2. **Email Verification** (`GET /api/auth/verify-email?token=`): activates user
-3. **Login** (`POST /api/auth/[...nextauth]`): validates email/password, requires verified email (platform admins exempt), returns JWT
-4. **Session**: JWT contains `id`, `email`, `name`, `platformRole`, `role`, `organizationId`, `campusId`, `membershipId`
-5. **Password Reset**: forgot-password → token email → reset-password
+1. **Email signup** → verify email → login → JWT session
+2. **Invite signup** → create user + membership, email auto-verified
+3. **Phone-first (passwordless)** → send OTP → verify → create/find user → JWT
+4. **Password reset** → forgot-password → token email → reset
 
 ### Authorization Guards (`web/lib/auth-guard.ts`)
 
 | Function | Behavior |
 |----------|----------|
 | `requireAuth()` | Session required. Must have `organizationId` OR `platformRole`. Returns `AuthUser` or 401/403. |
-| `requireVerifiedAuth()` | Session required only — no org requirement. Used for onboarding. |
-| `requireRole(guard, ...roles)` | 403 if user's `platformRole` or `role` not in allowed list. |
+| `requireVerifiedAuth()` | Session only — no org requirement. Used for onboarding. |
+| `requireRole(guard, ...roles)` | 403 if user's role not in allowed list. |
 | `isSuperAdmin(guard)` | True when `platformRole === "SUPER_ADMIN"`. |
 
 ### Role Hierarchy
@@ -442,85 +472,38 @@ FeeHead 1──∞ FeeStructure
 | `SUPER_ADMIN` | Global | All orgs, all data, all operations |
 | `SUPPORT` | Global | Read access (platform-level) |
 | `ORG_ADMIN` | Organization | Full access within their org |
+| `REGION_ADMIN` | Region | Hierarchical scope via unitPath prefix |
 | `CAMPUS_ADMIN` | Campus | Full access within assigned campus |
 | `ACCOUNTANT` | Campus | Finance operations |
-| `TEACHER` | Campus | Student-related operations |
+| `TEACHER` | Campus | Student-related, attendance, exams |
 | `PARENT` | Campus | Read-only (own children) |
 | `STAFF` | Campus | Limited operations |
 
-### Route Protection
+### Scope Filtering (`web/lib/tenant.ts`)
 
-- `/admin/*` and `/onboarding/*`: require login (enforced in `auth.config.ts`)
-- API routes: use `requireAuth()` or `requireVerifiedAuth()` per endpoint
-- Public routes: signup, forgot-password, reset-password, verify-email, invite validation
+`scopeFilter(guard, opts)` builds Prisma `where` clauses using `fullUnitPath` prefix matching for hierarchical roles. Prevents cross-tenant and cross-scope data access.
 
 ---
 
 ## 6. Multi-Tenant Architecture
 
-### Tenant Isolation (`web/lib/tenant.ts`)
-
-All data access is tenant-scoped using four utilities:
-
-| Utility | Purpose |
-|---------|---------|
-| `scopeFilter(guard, opts)` | Builds Prisma `where` clause. SUPER_ADMIN = `{}`, ORG_ADMIN = `{ organizationId }`, CAMPUS_ADMIN = `{ organizationId, campusId }`. |
-| `resolveOrgId(guard, bodyOrgId)` | For writes: SUPER_ADMIN may override orgId via body; others use session value. |
-| `validateCrossRefs(orgId, checks)` | Ensures referenced entities (campus, region, feeHead, student) belong to same org. Returns 403/404 if violated. |
-| `assertOwnership(guard, recordOrgId)` | Verifies a record belongs to the user's org. SUPER_ADMIN bypasses. |
-
-### Organization ID Generation
-
-Race-safe sequence using `OrganizationSequence` table:
-1. Upsert ensures row exists
-2. Atomic `UPDATE ... SET lastValue = lastValue + 1 RETURNING lastValue`
-3. Format: `ORG-XXXXX` (zero-padded to 5 digits)
+- **organizationId** on every data model — enforced at query level
+- **scopeFilter** for hierarchical RBAC (unitPath prefix matching)
+- **resolveOrgId** for writes (SUPER_ADMIN may override)
+- **validateCrossRefs** ensures referenced entities belong to same org
+- **assertOwnership** verifies record belongs to user's org
+- **Feature gating** via `assertFeatureEnabled()` — backend-enforced plan checks
+- **Governance policies** — centralized vs autonomous control per domain
 
 ---
 
 ## 7. Onboarding Flow
 
-### Architecture
+Multi-step registration: Identity → Legal → Contact/Address → Branding → Preview → Confirmation.
 
-- **Client-side state**: `OnboardingProvider` (React Context + localStorage) holds draft data across steps
-- **No per-step DB writes**: data is collected client-side through all steps
-- **Single DB write**: `POST /api/onboarding/complete` creates the Organization + Membership in one transaction at the end
-- **OTP verification**: email/mobile/WhatsApp verified during onboarding via `/api/onboarding/verify/send` and `/api/onboarding/verify/confirm`
+Client-side state via `OnboardingProvider` (React Context + localStorage). Single DB write at completion. OTP verification for email/mobile/WhatsApp during flow.
 
-### Steps
-
-| Step | Route | Data Collected |
-|------|-------|---------------|
-| 1. Identity | `/onboarding/identity` | organizationName, displayName, category, structure |
-| 2. Registration | `/onboarding/legal` | registrationNumber, taxNumber, establishedDate, certificate uploads |
-| 3. HO Address & Contacts | `/onboarding/contact-address` | Full Pakistan address (province→district→tehsil→city), phone, mobile, WhatsApp, email with OTP verification |
-| 4. Branding | `/onboarding/branding` | websiteUrl, logoUrl |
-| 5. Preview | `/onboarding/preview` | Review all data, edit links per section |
-| 6. Confirmation | `/onboarding/confirmation` | Shows created org ID, print/download/email actions |
-
-### Navigation
-
-Each step has **Back**, **Save** (to context), and **Next** buttons.
-
-### OnboardingProvider State
-
-```typescript
-interface OnboardingDraft {
-  identity: OnboardingIdentityInput | null;
-  legal: OnboardingLegalInput | null;
-  contactAddress: OnboardingContactAddressInput | null;
-  branding: OnboardingBrandingInput | null;
-  validatedSteps: StepKey[];
-}
-
-interface VerifiedFields {
-  organizationEmail: VerifiedEntry | null;
-  organizationMobile: VerifiedEntry | null;
-  organizationWhatsApp: VerifiedEntry | null;
-}
-```
-
-Persisted to `localStorage` keys: `sairex-onboarding-draft`, `sairex-onboarding-verified`.
+Steps also available for **guided school setup wizard** (adoption layer) which auto-bootstraps AcademicYear, Classes, Sections, and FeeStructures from presets.
 
 ---
 
@@ -531,71 +514,96 @@ Persisted to `localStorage` keys: `sairex-onboarding-draft`, `sairex-onboarding-
 | Method | Path | Auth | Summary |
 |--------|------|------|---------|
 | GET,POST | `/api/auth/[...nextauth]` | NextAuth | NextAuth catch-all |
-| POST | `/api/auth/signup` | None | Create account (with/without invite) |
-| GET | `/api/auth/verify-email` | None | Verify email token, activate user |
-| POST | `/api/auth/forgot-password` | None | Request password reset email |
+| POST | `/api/auth/signup` | None | Create account |
+| GET | `/api/auth/verify-email` | None | Verify email token |
+| POST | `/api/auth/forgot-password` | None | Request password reset |
 | POST | `/api/auth/reset-password` | None | Reset password with token |
 | POST | `/api/auth/change-password` | `requireAuth` | Change own password |
 
-### Onboarding (6 routes)
+### Onboarding (8 routes)
 
 | Method | Path | Auth | Summary |
 |--------|------|------|---------|
-| GET | `/api/onboarding/status` | `requireVerifiedAuth` | Get onboarding state + next URL |
-| POST | `/api/onboarding/identity` | `requireVerifiedAuth` | Step 1: save identity |
-| POST | `/api/onboarding/legal` | `requireVerifiedAuth` | Step 2: save legal info |
-| POST | `/api/onboarding/contact-address` | `requireVerifiedAuth` | Step 3: save address + contacts |
-| POST | `/api/onboarding/branding` | `requireVerifiedAuth` | Step 4: save branding |
-| POST | `/api/onboarding/complete` | `requireVerifiedAuth` | Final: create org + membership |
-| POST | `/api/onboarding/verify/send` | `requireVerifiedAuth` | Send OTP (email/mobile/WhatsApp) |
-| POST | `/api/onboarding/verify/confirm` | `requireVerifiedAuth` | Verify OTP code |
-
-### Organizations (5 routes)
-
-| Method | Path | Auth | Summary |
-|--------|------|------|---------|
-| GET | `/api/organizations` | `requireAuth` | List orgs (scoped) |
-| POST | `/api/organizations` | SUPER_ADMIN | Create organization |
-| GET | `/api/organizations/next-id` | SUPER_ADMIN | Preview next ORG-XXXXX |
-| GET,POST,PUT,DELETE | `/api/organizations/[id]/contacts` | `requireAuth` + ownership | CRUD org contacts |
-| GET,POST,PUT,DELETE | `/api/organizations/[id]/addresses` | `requireAuth` + ownership | CRUD org addresses |
+| GET | `/api/onboarding/status` | `requireVerifiedAuth` | Onboarding state + next URL |
+| POST | `/api/onboarding/identity` | `requireVerifiedAuth` | Step 1: identity |
+| POST | `/api/onboarding/legal` | `requireVerifiedAuth` | Step 2: legal |
+| POST | `/api/onboarding/contact-address` | `requireVerifiedAuth` | Step 3: address + contacts |
+| POST | `/api/onboarding/branding` | `requireVerifiedAuth` | Step 4: branding |
+| POST | `/api/onboarding/verify/send` | `requireVerifiedAuth` | Send OTP |
+| POST | `/api/onboarding/verify/confirm` | `requireVerifiedAuth` | Verify OTP |
+| GET | `/api/onboarding/certificate` | `requireAuth` | Registration certificate PDF |
 
 ### Core Resources
 
 | Method | Path | Auth | Summary |
 |--------|------|------|---------|
-| GET,POST | `/api/regions` | `requireAuth` | List/create geo entities (region, subRegion, city, zone) |
-| GET,POST | `/api/campuses` | `requireAuth` | List/create campuses |
-| GET,POST | `/api/students` | `requireAuth` | List/admit students |
-| GET,POST | `/api/invites` | ORG_ADMIN+ | List/send invites |
-| PUT | `/api/invites` | ORG_ADMIN+ | Lock/unlock user |
-| GET | `/api/invites/validate` | None | Validate invite token |
+| GET,POST | `/api/organizations` | `requireAuth` / SUPER_ADMIN | List/create orgs |
+| CRUD | `/api/organizations/[id]/contacts` | `requireAuth` | Org contacts |
+| CRUD | `/api/organizations/[id]/addresses` | `requireAuth` | Org addresses |
+| GET,POST | `/api/regions` | `requireAuth` | Geo hierarchy CRUD |
+| GET,POST | `/api/campuses` | `requireAuth` | Campus CRUD |
+| GET,POST | `/api/students` | `requireAuth` | Student admission |
+| GET,POST,PUT | `/api/invites` | ORG_ADMIN+ | Invite system |
+| GET,POST | `/api/memberships` | `requireAuth` | Membership management |
+| GET,POST | `/api/unit-profiles` | `requireAuth` | Unit profile CRUD |
 
 ### Finance (3 routes)
 
 | Method | Path | Auth | Summary |
 |--------|------|------|---------|
-| GET,POST | `/api/finance/heads` | `requireAuth` | List/create fee heads |
-| GET,POST | `/api/finance/structures` | `requireAuth` | List/create fee structures |
-| GET,POST,PUT | `/api/finance/challans` | `requireAuth` | List/generate/pay challans |
+| GET,POST | `/api/finance/heads` | `requireAuth` | Fee heads |
+| GET,POST | `/api/finance/structures` | `requireAuth` | Fee structures |
+| GET,POST,PUT | `/api/finance/challans` | `requireAuth` | Challans |
 
-### Jobs (6 routes)
+### Payments (3 routes)
 
 | Method | Path | Auth | Summary |
 |--------|------|------|---------|
-| GET | `/api/jobs` | ORG_ADMIN+ | List jobs (paginated, filterable) |
-| GET | `/api/jobs/[id]` | `requireAuth` | Poll job status |
+| POST | `/api/payments/initiate` | `requireAuth` | Initiate gateway payment session |
+| POST | `/api/payments/webhook/[gateway]` | Public | Gateway callback (async via queue) |
+| GET,POST | `/api/payments/config` | ORG_ADMIN | Payment gateway configuration |
+
+### Reminders (1 route)
+
+| Method | Path | Auth | Summary |
+|--------|------|------|---------|
+| GET,POST | `/api/reminders/templates` | ORG_ADMIN | Message template CRUD |
+
+### Governance (5 routes)
+
+| Method | Path | Auth | Summary |
+|--------|------|------|---------|
+| GET,POST | `/api/governance/policy` | ORG_ADMIN | Control mode management |
+| GET | `/api/governance/dashboard` | ORG_ADMIN | Chain KPIs, campus comparison, leakage alerts |
+| GET,POST | `/api/governance/campus-lock` | ORG_ADMIN | Campus lock/unlock |
+| GET,POST | `/api/governance/health-scores` | ORG_ADMIN | Health scores (read + refresh) |
+| GET,POST,DELETE | `/api/governance/fee-templates` | ORG_ADMIN | Centralized fee templates |
+
+### Dashboard & QR
+
+| Method | Path | Auth | Summary |
+|--------|------|------|---------|
+| GET | `/api/dashboard` | `requireAuth` | Role-based action registry |
+| GET,POST | `/api/qr` | Varies | QR token generation + resolution |
+
+### Webhooks
+
+| Method | Path | Auth | Summary |
+|--------|------|------|---------|
+| POST,GET | `/api/webhooks/whatsapp` | Public | WhatsApp delivery status + verification |
+
+### Health & System
+
+| Method | Path | Auth | Summary |
+|--------|------|------|---------|
+| GET | `/api/health` | None | System health (db, redis). `?check=db` or `?check=redis`. |
+| GET | `/api/jobs` | ORG_ADMIN+ | Job monitor |
 | POST | `/api/jobs/challan-pdf` | ACCOUNTANT+ | Enqueue challan PDF |
-| POST | `/api/jobs/report` | ACCOUNTANT+ | Enqueue report generation |
-| POST | `/api/jobs/bulk-sms` | ORG_ADMIN+ | Enqueue bulk SMS (max 5000) |
-| POST | `/api/jobs/import` | CAMPUS_ADMIN+ | Enqueue CSV import (max 10k rows) |
-
-### System
-
-| Method | Path | Auth | Summary |
-|--------|------|------|---------|
-| GET | `/api/cron/reminders` | ORG_ADMIN+ | Enqueue reminders for due challans |
-| GET,DELETE | `/api/dev-tools` | SUPER_ADMIN | List/delete users & orgs (dev only) |
+| POST | `/api/jobs/report` | ACCOUNTANT+ | Enqueue report |
+| POST | `/api/jobs/bulk-sms` | ORG_ADMIN+ | Enqueue bulk SMS |
+| POST | `/api/jobs/import` | CAMPUS_ADMIN+ | Enqueue CSV import |
+| GET | `/api/cron/reminders` | ORG_ADMIN+ | Trigger reminder engine |
+| GET,DELETE | `/api/dev-tools` | SUPER_ADMIN | Dev utilities |
 
 ---
 
@@ -611,514 +619,951 @@ Client → API Route → enqueue() → [Postgres Job row] + [BullMQ queue]
                           Worker processes + updates Job status
 ```
 
-**Dual-write pattern:** Every job is first persisted to Postgres (audit trail) then enqueued to BullMQ (processing). If Redis is down, the Postgres record survives.
+**Dual-write pattern:** Every job is persisted to Postgres (audit trail) then enqueued to BullMQ. Idempotency via `idempotencyKey` on the Job model.
 
-### Queues (9)
+### Queues (15)
 
-| Queue Constant | Name | Concurrency | Purpose |
-|---------------|------|-------------|---------|
+| Queue | Name | Concurrency | Purpose |
+|-------|------|-------------|---------|
 | `EMAIL_QUEUE` | email | 5 | Email delivery |
 | `OTP_QUEUE` | otp | 5 | OTP code delivery |
 | `SMS_QUEUE` | sms | 3 | SMS via Veevo Tech |
-| `WHATSAPP_QUEUE` | whatsapp | 1 | WhatsApp via puppeteer (rate limited: 1/2s) |
+| `WHATSAPP_QUEUE` | whatsapp | 1 | WhatsApp messaging (rate limited) |
 | `NOTIFICATION_QUEUE` | notification | 3 | Fan-out → email + SMS + WhatsApp |
 | `CHALLAN_PDF_QUEUE` | challan-pdf | 2 | PDF generation |
 | `REPORT_QUEUE` | report | 2 | Report PDF generation |
 | `BULK_SMS_QUEUE` | bulk-sms | 1 | Fan-out → individual SMS jobs |
 | `IMPORT_QUEUE` | import | 1 | CSV data import |
-
-### Default Job Options
-
-```typescript
-{
-  attempts: 3,
-  backoff: { type: "exponential", delay: 2000 },
-  removeOnComplete: { count: 1000 },
-  removeOnFail: { count: 5000 }
-}
-```
+| `FINANCE_QUEUE` | finance | 2 | Fee posting, reconciliation |
+| `PROMOTION_QUEUE` | promotion | 1 | Academic year rollover |
+| `REMINDER_QUEUE` | reminder | 5 | Automated collection reminders |
+| `SYSTEM_QUEUE` | system | 2 | Recovery, cleanup, health score refresh |
+| `WEBHOOK_QUEUE` | webhook | 10 | Payment gateway webhook processing |
+| `EVENT_HANDLER_QUEUE` | event-handlers | 5 | Async domain event handlers |
 
 ### Worker Bootstrap
 
-- **Development:** `instrumentation.ts` (Next.js hook) starts workers in-process
+- **Development:** `instrumentation.ts` starts workers in-process
 - **Production:** `npm run worker` → `scripts/start-workers.ts` (separate process)
-- **All workers use dynamic imports** for Prisma and external modules to avoid initialization timing issues
 
-### enqueue() Interface
+### Recovery System (`queue/recovery.ts`)
 
-```typescript
-interface EnqueueOptions {
-  type: string;           // EMAIL, SMS, OTP, WHATSAPP, NOTIFICATION, CHALLAN_PDF, REPORT, BULK_SMS, IMPORT
-  queue: string;          // Queue constant
-  payload: Record<string, unknown>;
-  userId?: number;
-  organizationId?: string;
-  priority?: number;      // Higher = more priority
-  scheduledAt?: Date;
-}
-```
-
-Returns the `Job.id` (cuid) for polling.
-
-### Fan-out Workers
-
-- **notification.worker**: Receives student + challan data → enqueues separate EMAIL, SMS, WHATSAPP jobs
-- **bulk-sms.worker**: Receives message + recipients[] → enqueues one SMS job per recipient
+Handles stuck jobs (PROCESSING for too long) and dead jobs (exceeded max attempts). Can be triggered via SYSTEM_QUEUE.
 
 ---
 
-## 10. PDF Generation
+## 10. Event-Driven Architecture
+
+### Architecture
+
+```
+Domain Action → emit(eventType, payload) → EventBus
+    ↓ sync handlers (immediate, in-process)
+    ↓ async handlers (pushed to EVENT_HANDLER_QUEUE)
+    ↓ DomainEventLog (persisted for audit/replay)
+```
+
+### Core Components (`lib/events/`)
+
+| File | Purpose |
+|------|---------|
+| `bus.ts` | Event dispatcher with sync/async handler routing |
+| `types.ts` | 30+ typed event interfaces with `EventPayloadMap` |
+| `registry.ts` | Handler registration (finance, academic, notification, analytics) |
+| `index.ts` | Barrel export |
+
+### Event Categories
+
+| Category | Events |
+|----------|--------|
+| **Finance** | PaymentReceived, PaymentReconciled, PaymentReversed, ChallanCreated, FeePostingCompleted, FeePostingFailed, PaymentInitiated, WebhookProcessed |
+| **Academic** | StudentEnrolled, StudentPromoted, StudentWithdrawn, StudentTransferred, AcademicYearClosed, AcademicYearActivated, ExamPublished, PromotionRunCompleted |
+| **Notification** | ReminderRunCompleted, ReminderSent |
+| **Adoption** | OtpRequested, PhoneLoginCompleted, QrTokenGenerated, QrTokenResolved, ParentAccessCreated, WizardStepCompleted, OrganizationBootstrapped |
+| **Governance** | CampusLocked, CampusUnlocked, ControlPolicyChanged, CampusHealthRefreshed |
+| **System** | JobFailed, ReportGenerated |
+
+### DomainEventLog Model
+
+Every emitted event is persisted with `organizationId`, `eventType`, `payload` (Json), and `processed` flag. Supports replay, debugging, analytics pipelines, and future microservice migration.
+
+---
+
+## 11. Financial Engine
+
+### Services (`lib/finance/`)
+
+| Service | Purpose |
+|---------|---------|
+| `challan-routing.service.ts` | Deterministic bank selection: Campus → UnitProfile → Primary BankAccount. Supports `NEAREST_PARENT_PRIMARY` mode (hierarchy traversal). O(1) via in-memory mapping. |
+| `reconciliation.service.ts` | Matches payments to challans. Creates LedgerEntry (CREDIT). Updates StudentFinancialSummary atomically. Handles partial payments, overpayments, refunds. All in `$transaction`. |
+| `student-ledger.service.ts` | Balance = SUM(DEBIT) - SUM(CREDIT). Live computation + materialized summary. Aging buckets (0-30, 31-60, 61-90, 90+). Defaulter detection. |
+| `fee-posting.service.ts` | Automated monthly/term challan generation. Idempotent via PostingRun + FeeChallan unique constraints. Batch-safe (500 per chunk via createMany). |
+| `defaulter.service.ts` | Student-level aging, campus/region aggregation, collection efficiency, risk indicators. |
+| `reminder-engine.service.ts` | Detects overdue students via aging. Matches ReminderRules by trigger type + daysOffset. Frequency-based dedup. Payment link injection via QR tokens. Delivery status tracking (WhatsApp webhooks). |
+
+### Key Design Decisions
+
+- **Ledger is immutable** — never modify old entries, only add compensating entries
+- **Balance uses direction** — DEBIT (student owes) vs CREDIT (student paid), not negative amounts
+- **StudentFinancialSummary** updated atomically inside reconciliation `$transaction`
+- **PostingRun** unique constraint prevents duplicate fee generation
+- **Arrears carry forward** naturally via ledger (no manual copy)
+
+---
+
+## 12. Academic Engine
+
+### Services (`lib/academic/`)
+
+| Service | Purpose |
+|---------|---------|
+| `academic-year.service.ts` | CRUD + activation (atomic: deactivate all → activate one). Guards: only one active year per org. |
+| `class-section.service.ts` | Year-aware class/section CRUD. Classes reset each year. Section capacity enforcement. |
+| `enrollment.service.ts` | Enroll student into active year. Unique [studentId, academicYearId]. Section capacity check. Transfer support (section/class/campus). |
+| `attendance.service.ts` | Bulk marking per section per day. Validates enrollment, no duplicates, no withdrawn students. Normalizes dates to UTC. |
+| `exam.service.ts` | Exam lifecycle (DRAFT→ACTIVE→LOCKED→PUBLISHED). Bulk result entry. Tabulation (groupBy obtainedMarks). Grade computation via GradeScale. |
+| `promotion.service.ts` | Year rollover: clone classes/sections → promote/retain students → link via promotedFromId → close old year → activate new year. Idempotent via PromotionRun. ORG_ADMIN only. |
+
+### Key Design Decisions
+
+- **Everything is year-scoped** — academicYearId on Class, Section, Enrollment, Attendance, Exam, Subject
+- **Enrollment is the bridge** — not Student directly. Finance, attendance, exams query via enrollment.
+- **Promotion creates new records** — old enrollment → COMPLETED, new enrollment → ACTIVE with promotedFromId
+- **Class structure cloned** on rollover — Grade 1 (2025) ≠ Grade 1 (2026)
+
+---
+
+## 13. Adoption Layer
+
+Non-breaking, additive layer for market accessibility. All features call existing core services.
+
+### Passwordless Phone Auth (`lib/adoption/otp.service.ts`)
+
+- OTP sent via SMS queue, SHA-256 hashed in DB
+- Per-phone + per-IP rate limiting (5 requests per 5 min)
+- IP address + User Agent tracking
+- Finds/creates User by phone, links to Membership
+- Returns JWT session on success
+
+### QR Token Infrastructure (`lib/adoption/qr-token.service.ts`)
+
+- Secure token pointer: `https://app.sairex.com/q/{tokenId}`
+- Types: FEE_PAYMENT, PARENT_ACCESS, ADMISSION, ATTENDANCE, LOGIN
+- Time-bound, optional one-time use
+- Tenant-isolated resolution
+- Metadata support (Json field)
+
+### Guided Setup Wizard (`lib/adoption/bootstrap.service.ts`)
+
+- `bootstrapOrganizationSetup()` — transactional, idempotent
+- Auto-creates: AcademicYear, Classes (from presets), Sections, FeeStructures
+- Supports presets: Nursery→10, 1→5, 6→10, 1→12, Custom
+- OnboardingProgress model tracks wizard state
+
+### Action Dashboard (`lib/adoption/dashboard.service.ts`)
+
+- Role-based action grid (6 buttons, not 60 menus)
+- Quick stats from optimized queries
+- Activity feed from DomainEventLog
+- DashboardAction model for per-org customization
+
+---
+
+## 14. Payment Gateway Integration
+
+### Architecture
+
+```
+Parent scans QR → Payment Gateway → Webhook → WEBHOOK_QUEUE → reconciliation → ledger + events
+```
+
+### Gateway Abstraction (`lib/payments/gateway.interface.ts`)
+
+```typescript
+interface PaymentGatewayAdapter {
+  gateway: PaymentGateway;
+  createPaymentSession(input): Promise<PaymentSessionResult>;
+  verifyWebhook(payload, signature, headers): boolean;
+  normalizeWebhook(payload): NormalizedPayment;
+}
+```
+
+### Adapters (`lib/payments/adapters/`)
+
+| Adapter | Gateway | Status |
+|---------|---------|--------|
+| `manual.adapter.ts` | MANUAL | Complete |
+| `easypaisa.adapter.ts` | EASYPAISA | Skeleton (needs API credentials) |
+| `jazzcash.adapter.ts` | JAZZCASH | Skeleton |
+| `onebill.adapter.ts` | ONEBILL | Skeleton |
+| `stripe.adapter.ts` | STRIPE | Skeleton |
+
+### Payment Service (`lib/payments/payment.service.ts`)
+
+- `initiatePayment()` — resolves adapter, creates session, stores PENDING PaymentRecord
+- `processWebhook()` — verifies signature, normalizes payload, prevents duplicates via `[gateway, gatewayRef]`, delegates to reconciliation
+- `getPaymentConfig()` / `savePaymentConfig()` — per-org gateway configuration
+
+---
+
+## 15. Chain Governance (Master Control Panel)
+
+For school chains with 20+ campuses. 100% additive — no impact on single-school mode.
+
+### Control Policy (`lib/governance/control-policy.service.ts`)
+
+- **ControlMode per domain:** fee, academic, messaging, posting
+- **CENTRALIZED** = only ORG_ADMIN can modify; **CAMPUS_AUTONOMOUS** = campus-level users can modify
+- `enforceOperationalGuard()` — composite check: policy + campus lock in one call
+- **Campus locks** — isFinancialLocked / isAcademicLocked with reason tracking
+
+### Campus Health Score (`lib/governance/campus-health.service.ts`)
+
+Composite score (0-100) computed from:
+- Collection Rate (40%) — paidAmount/totalAmount via groupBy
+- Attendance Rate (30%) — 30-day present+late/total
+- Academic Score (20%) — exam pass rate
+- Enrollment Growth (10%) — year-over-year change
+
+Materialized to `CampusHealthScore` table. Risk levels: LOW (75+), MODERATE (50-74), HIGH (30-49), CRITICAL (<30).
+
+### Master Dashboard (`lib/governance/master-dashboard.service.ts`)
+
+- **Chain KPIs** — total campuses, students, collection, outstanding, efficiency %, attendance, digital payment ratio
+- **Campus Comparison** — per-campus table with all metrics + lock status
+- **Leakage Detection** — flags low collection (<30% HIGH, <50% MEDIUM) + unreconciled payment backlogs
+
+### Fee Templates
+
+Head Office-defined fee templates that can be pushed to campuses when fee control is centralized.
+
+---
+
+## 16. Launch Readiness
+
+### Feature Gating (`lib/feature-gate.ts`)
+
+- **Internal PlanType:** FREE, BASIC, PRO, ENTERPRISE
+- **Public commercial tiers:** STARTER, PROFESSIONAL, ENTERPRISE
+- **Naming contract:** internal plans stay technical for entitlement storage; UI/commercial surfaces expose public tiers from `lib/billing/pricing-architecture.ts`
+- **11 feature keys:** DIGITAL_PAYMENTS, WHATSAPP_REMINDERS, SMS_REMINDERS, MULTI_CAMPUS, PROMOTION_ENGINE, ADVANCED_REPORTS, QR_TOKENS, BULK_IMPORT, API_ACCESS, CUSTOM_BRANDING, EVENT_WEBHOOKS
+- **In-memory cache** with 5-minute TTL
+- `assertFeatureEnabled(orgId, feature)` — returns 403 NextResponse or null
+- `seedPlanFeatures()` — populates matrix from defaults
+
+| Feature | Free | Basic | Pro | Enterprise |
+|---------|------|-------|-----|------------|
+| Digital Payments | - | Y | Y | Y |
+| WhatsApp Reminders | - | - | Y | Y |
+| Multi-Campus | - | - | Y | Y |
+| Advanced Reports | - | - | - | Y |
+| API Access | - | - | - | Y |
+
+### Pricing Architecture (`lib/billing/pricing-architecture.ts`)
+
+- **Commercial model:** per-student, per-month billing in PKR (`PER_STUDENT_MONTH`)
+- **Tiering basis:** student count (not per-feature upsell messaging)
+- **STARTER:** 100-400 students, PKR 40-60 per student/month
+- **PROFESSIONAL:** 401-1500 students, PKR 70-90 per student/month
+- **ENTERPRISE:** 1501+ students, custom commercial model
+- **Trial policy:** 30 days, full feature, no credit card required
+- **Upgrade guidance:** SIMPLE -> PRO recommendation is generated from live student usage (`lib/billing/plan-usage.service.ts`)
+- **Annual prepay support:** usage payload includes annual prepay discount metadata
+
+### Encryption (`lib/encryption.ts`)
+
+AES-256-GCM for sensitive config: payment gateway API keys, WhatsApp tokens, SMS credentials. Key from `ENCRYPTION_KEY` env (64-char hex).
+
+### Rate Limiting (`lib/rate-limit.ts`)
+
+Sliding-window in-memory counters:
+- `API_GENERAL`: 100/min
+- `OTP_REQUEST`: 5/5min
+- `LOGIN_ATTEMPT`: 10/5min
+- `WEBHOOK`: 200/min
+- `QR_RESOLVE`: 60/min
+- `PAYMENT_INITIATE`: 20/min
+
+`applyRateLimit(request, prefix, config)` — returns 429 or null. Tenant-scoped variant available.
+
+### Security (`lib/security.ts`)
+
+- `assertOwnership()` — hard tenant guard
+- `isWebhookReplay()` — 10-minute dedup window
+- `isWebhookTimestampValid()` — rejects stale webhooks (>5min)
+- `SECURITY_HEADERS` — HSTS, X-Frame-Options, etc.
+
+### Health Checks (`/api/health`)
+
+- `GET /api/health` — overall status (checks DB + Redis)
+- `GET /api/health?check=db` — database only
+- `GET /api/health?check=redis` — Redis only
+- Returns 200 (ok/degraded) or 503 (down) with latency metrics
+
+---
+
+## 17. PDF Generation
 
 ### Challan PDF (`lib/pdf/challan-pdf.ts`)
 
-- PDFKit landscape 792×432
-- Three copies per page: Bank Copy, School Copy, Student Copy
-- Includes: org info, campus, bank details, student details, fee breakdown table, PAID stamp
-- Output: `public/generated/challans/challan-{no}-{timestamp}.pdf`
+PDFKit landscape. Three copies per page: Bank, School, Student. Includes org info, campus, bank details, student details, fee breakdown, PAID stamp.
 
 ### Report PDF (`lib/pdf/report-pdf.ts`)
 
-- PDFKit A4 portrait
-- Configurable columns + rows table with pagination
-- Report types: FEE_COLLECTION, FEE_DEFAULTERS, STUDENT_LIST
-- Includes: org header, title, subtitle, generated-by, optional summary
-- Output: `public/generated/reports/report-{type}-{timestamp}.pdf`
+PDFKit A4 portrait. Configurable columns + rows with pagination. Types: FEE_COLLECTION, FEE_DEFAULTERS, STUDENT_LIST.
 
 ---
 
-## 11. UI Component System
+## 18. UI Component System
 
 ### Sx Components (`components/sx/`)
 
-Custom SAIREX design components built on top of Shadcn UI:
+| Component | Purpose |
+|-----------|---------|
+| `SxPageHeader` | Page title bar with actions |
+| `SxButton` | Themed button with loading state |
+| `SxDataTable<T>` | Generic data table with columns, skeleton |
+| `SxStatusBadge` | Status display with auto-mapped variants |
+| `SxFormSection` | Form field grouping (1/2/3 column grid) |
+| `SxAmount` | Formatted currency display |
+| `SxProfileHeader` | Avatar + name + meta display |
 
-| Component | Purpose | Key Props |
-|-----------|---------|-----------|
-| `SxPageHeader` | Page title bar with optional actions | `title`, `subtitle`, `actions` |
-| `SxButton` | Themed button with loading state | `sxVariant` (primary/secondary/outline/ghost/danger), `loading`, `icon` |
-| `SxDataTable<T>` | Generic data table with columns, loading skeleton | `columns: SxColumn<T>[]`, `data`, `onRowClick`, `loading`, `emptyMessage` |
-| `SxStatusBadge` | Status/type display with variants | `status` or `feeStatus`, auto-maps to variant (success/destructive/warning/info/muted + fee-*) |
-| `SxFormSection` | Form field grouping | `title`, `description`, `columns` (1/2/3 grid) |
-| `SxFormLayout` | Max-width form container | `children` |
-| `SxFormCard` | Bordered card for form sections | `children` |
-| `SxFormField` | Label + helper + error wrapper | `label`, `helper`, `error`, `fullWidth` |
-| `SxActionBar` | Sticky bottom action bar | `children` |
-| `SxAmount` | Formatted currency display | `amount`, `currency` (default "Rs."), `decimals`, `colorNegative` |
-| `SxProfileHeader` | Avatar + name + meta display | `name`, `meta[]`, `status`, `actions`, `imageUrl` |
+### Shadcn UI
 
-### SxColumn Interface
-
-```typescript
-interface SxColumn<T> {
-  key: keyof T | string;
-  header: string;
-  numeric?: boolean;
-  mono?: boolean;
-  width?: string;
-  render?: (row: T) => ReactNode;
-}
-```
-
-### Shadcn UI Components Used
-
-Avatar, Badge, Button, Card, Checkbox, Dialog, DropdownMenu, Form (+ FormField, FormItem, FormLabel, FormControl, FormMessage), Input, Label, ScrollArea, Select, Separator, Sheet, Skeleton, Sonner (Toaster), Switch, Table, Tabs, Textarea, Tooltip
+Avatar, Badge, Button, Card, Checkbox, Dialog, DropdownMenu, Form, Input, Label, ScrollArea, Select, Separator, Sheet, Skeleton, Sonner, Switch, Table, Tabs, Textarea, Tooltip.
 
 ---
 
-## 12. Validation Layer
+## 19. Validation Layer
 
-All validations use **Zod v4** with **zodResolver** for react-hook-form integration.
+All validations use **Zod v4** with **zodResolver** for react-hook-form.
 
 ### Schema Files (`lib/validations/`)
 
-| File | Schemas | Used By |
-|------|---------|---------|
-| `organization.ts` | `createOrganizationSchema`, `updateOrganizationSchema` | Admin org CRUD |
-| `organization-address.ts` | `createOrganizationAddressSchema`, `updateOrganizationAddressSchema` | Address CRUD |
-| `organization-contact.ts` | `createOrganizationContactSchema`, `updateOrganizationContactSchema` | Contact CRUD |
-| `onboarding.ts` | `identitySchema`, `legalSchema`, `contactAddressSchema`, `brandingSchema`, `onboardingCompleteSchema` | Onboarding flow |
-| `signup.ts` | `signupSchema` | Auth signup |
-
-### Shared Constants
-
-```typescript
-ORGANIZATION_CATEGORY: ["SCHOOL", "COLLEGE", "ACADEMY", "INSTITUTE", "UNIVERSITY", "OTHERS"]
-ORGANIZATION_STRUCTURE: ["SINGLE", "MULTIPLE"]
-ORGANIZATION_STATUS: ["ACTIVE", "SUSPENDED", "ARCHIVED"]
-PAKISTAN_PROVINCES: [...] // Full list of Pakistani provinces
-```
-
-### Pakistan Geo Data (`lib/data/pakistan-geo.ts`)
-
-Cascading data structure: Province → District → Tehsil → City. Used in the onboarding contact-address step for cascading dropdowns.
+| File | Schemas |
+|------|---------|
+| `organization.ts` | createOrganizationSchema, updateOrganizationSchema |
+| `organization-address.ts` | address CRUD schemas |
+| `organization-contact.ts` | contact CRUD schemas |
+| `onboarding.ts` | identitySchema, legalSchema, contactAddressSchema, brandingSchema |
+| `signup.ts` | signupSchema |
 
 ---
 
-## 13. Admin Pages
-
-### Page Structure Standard
-
-Every admin page follows this structure (reference: `organizations/page.tsx`):
-
-```
-1. "use client" directive
-2. Import block (React → resolvers → sonner → lucide → api-client → validations → Sx → shadcn)
-3. TypeScript interfaces
-4. Column definitions as SxColumn<T>[]
-5. Helper functions
-6. Default export component:
-   - State hooks
-   - useCallback data-fetching with api.get<T>()
-   - useForm<T>({ resolver: zodResolver(schema) })
-   - Submit handler with api.post<T>() + field-error mapping
-   - Dialog open/close with reset()
-   - JSX: SxPageHeader → SxDataTable → Dialog with SxFormSection
-```
-
-### Admin Page Inventory
+## 20. Admin Pages
 
 | Page | Route | Features |
 |------|-------|----------|
-| **Dashboard** | `/admin/dashboard` | Stats cards (orgs, campuses, students), revenue chart placeholder |
-| **Organizations** | `/admin/organizations` | CRUD table, create dialog with Zod validation, next-ID preview |
-| **Geo Hierarchy** | `/admin/regions` | Tabs: Regions, Sub-Regions, Cities, Zones. Create dialog per type. |
-| **Campuses** | `/admin/campuses` | List + create dialog (org, region, name, code, city) |
-| **Students** | `/admin/students` | List + admit dialog (org, campus, name, admissionNo, grade) |
-| **Users & Invites** | `/admin/users` | Users table, invites table, invite dialog, lock/unlock |
-| **Finance** | `/admin/finance` | Tabs: Fee Categories, Pricing Rules, Bills. Create/payment dialogs |
-| **Print Challan** | `/admin/finance/challans/[id]/print` | Server component, 3-copy challan layout, print controls |
-| **Job Monitor** | `/admin/jobs` | Stats cards, status/type filters, paginated table, job detail dialog, auto-refresh |
-| **Dev Tools** | `/admin/dev-tools` | Tabs: pending accounts, users & orgs. Permanent delete with confirmation |
-| **Change Password** | `/admin/change-password` | Current + new + confirm password form |
+| Dashboard | `/admin/dashboard` | Stats cards, revenue chart |
+| Organizations | `/admin/organizations` | CRUD table, create dialog |
+| Geo Hierarchy | `/admin/regions` | Tabs: Regions, SubRegions, Cities, Zones |
+| Campuses | `/admin/campuses` | List + create dialog |
+| Students | `/admin/students` | List + admit dialog |
+| Users & Invites | `/admin/users` | Users/invites tables, lock/unlock |
+| Finance | `/admin/finance` | Fee heads, structures, challans |
+| Print Challan | `/admin/finance/challans/[id]/print` | 3-copy challan layout |
+| Audit Log | `/admin/audit` | Audit trail viewer |
+| Job Monitor | `/admin/jobs` | Stats, filters, paginated table |
+| Dev Tools | `/admin/dev-tools` | SUPER_ADMIN utilities |
+| Change Password | `/admin/change-password` | Password change form |
 
 ---
 
-## 14. Navigation & Sidebar
-
-Defined in `lib/config/theme.ts`:
+## 21. Navigation & Sidebar
 
 ```
-├── Dashboard                    (/admin/dashboard)
-├── Core Setup
-│   ├── Organizations            (/admin/organizations)
-│   ├── Geo Hierarchy            (/admin/regions)
-│   └── Campuses                 (/admin/campuses)
-├── Management
-│   ├── Students                 (/admin/students)
-│   └── Fee Module               (/admin/finance)
-├── Admin
-│   └── Users & Invites          (/admin/users)
-├── System
-│   └── Job Monitor              (/admin/jobs)
-└── Development
-    └── Dev Tools                (/admin/dev-tools)
+├── Dashboard
+├── Core Setup (Organizations, Geo Hierarchy, Campuses)
+├── Management (Students, Fee Module)
+├── Admin (Users & Invites)
+├── System (Job Monitor, Audit Log)
+└── Development (Dev Tools)
 ```
-
-Icons: LayoutDashboard, Building2, Map, School, GraduationCap, Wallet, Users, Activity, Wrench (from lucide-react).
 
 ---
 
-## 15. External Services
+## 22. External Services
 
-### Email (Nodemailer)
-
-```
-Host: smtp.titan.email
-Port: 465 (SSL)
-From: alert@sairex-sms.com ("Sairex SMS")
-```
-
-Used for: verification emails, password reset, invitations, OTP delivery, notifications.
-
-### SMS (Veevo Tech)
-
-```
-API: https://api.veevotech.com/sendsms
-Auth: hash parameter (env: VEEVO_HASH)
-Sender: env: VEEVO_SENDER
-```
-
-Dev mode fallback: logs SMS to console if env vars missing.
-
-### WhatsApp (whatsapp-web.js)
-
-```
-Strategy: Puppeteer-based WhatsApp Web automation
-Auth: LocalAuth (.wwebjs_auth directory)
-Init: QR code displayed in terminal on first run
-Phone format: 0300... → 92300...@c.us
-```
-
-Rate limited: 1 message per 2 seconds.
+| Service | Technology | Purpose |
+|---------|-----------|---------|
+| Email | Nodemailer → Titan SMTP (smtp.titan.email:465) | Transactional email |
+| SMS | Axios → Veevo Tech API | SMS delivery |
+| WhatsApp | whatsapp-web.js (dev) / WhatsApp Cloud API (prod) | Messaging with delivery tracking |
+| PDF | @react-pdf/renderer + PDFKit | Certificates + challans + reports |
+| Storage | AWS S3 + sharp | Media assets (logo variants) |
+| Payments | EasyPaisa, JazzCash, 1Bill, Stripe | Fee payment processing |
 
 ---
 
-## 16. Environment Variables
+## 23. Environment Variables
 
 ### Required (`web/.env.local`)
 
-| Variable | Example | Purpose |
-|----------|---------|---------|
-| `DATABASE_URL` | `postgresql://postgres:pass@localhost:5432/sairex_db?schema=public` | PostgreSQL connection |
-| `NEXTAUTH_SECRET` | `<64-char hex>` | JWT signing secret |
-| `NEXTAUTH_URL` | `http://localhost:3000` | NextAuth base URL |
-| `SMTP_HOST` | `smtp.titan.email` | Email server |
-| `SMTP_PORT` | `465` | Email port |
-| `SMTP_USER` | `alert@sairex-sms.com` | Email user |
-| `SMTP_PASS` | `<password>` | Email password |
-| `SMTP_FROM_NAME` | `Sairex SMS` | Email from name |
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection |
+| `NEXTAUTH_SECRET` | JWT signing secret |
+| `NEXTAUTH_URL` | NextAuth base URL |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM_NAME` | Email delivery |
 
 ### Optional
 
 | Variable | Purpose |
 |----------|---------|
 | `REDIS_URL` | Redis connection (default: `redis://127.0.0.1:6379`) |
-| `VEEVO_HASH` | Veevo Tech SMS API key |
-| `VEEVO_SENDER` | SMS sender number |
-| `AWS_REGION` | AWS S3 region for media storage |
-| `AWS_ACCESS_KEY_ID` | AWS IAM access key |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret key |
-| `AWS_S3_BUCKET` | S3 bucket name for assets |
-| `NEXT_PUBLIC_CDN_URL` | CDN base URL for serving uploaded assets |
+| `ENCRYPTION_KEY` | AES-256-GCM key (64-char hex) for sensitive config encryption |
+| `VEEVO_HASH`, `VEEVO_SENDER` | SMS provider credentials |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET` | S3 media storage |
+| `NEXT_PUBLIC_CDN_URL` | CDN for uploaded assets |
+| `WHATSAPP_VERIFY_TOKEN` | WhatsApp webhook verification token |
 
 ---
 
-## 16a. Enterprise Media Asset System
+## 24. Scripts & Tooling
 
-### Overview
+### npm Scripts
 
-SAIREX uses AWS S3 with server-side image processing (sharp) for all media uploads.
-Uploads are validated, optimized to WEBP, and stored as versioned variants (SM/MD/LG).
-
-### Architecture
-
-```
-Browser (FormData) → POST /api/media/logo/upload
-  → Validate (dimensions, format, size)
-  → Generate WEBP variants (SM 64px, MD 128px, LG 256px, ORIGINAL)
-  → Upload all to S3
-  → Delete previous version from S3
-  → Save MediaAsset rows (versioned)
-  → Update Organization branding fields
-  → Return variant URLs to browser
-```
-
-### Models
-
-- **`MediaAsset`** — versioned audit table per uploaded file
-  - Fields: `type`, `variant`, `url`, `key`, `size`, `mimeType`, `width`, `height`, `version`, `createdBy`
-- **`Organization`** branding fields:
-  - `logoUrl` — primary logo URL (MD variant)
-  - `logoKey` — S3 key for deletion
-  - `logoUpdatedAt` — cache-busting timestamp
-  - `logoLightUrl` — light theme logo
-  - `logoDarkUrl` — dark theme logo
-  - `logoPrintUrl` — print/report logo
-
-### `MediaType` Enum
-
-| Value | Usage |
-|-------|-------|
-| `LOGO` | Organization logo |
-| `FAVICON` | Browser favicon |
-| `DOCUMENT` | Registration certificates, NTN, etc. |
-
-### `MediaVariant` Enum
-
-| Value | Size | Usage |
-|-------|------|-------|
-| `ORIGINAL` | Full size (WEBP) | Archive / high-res |
-| `SM` | 64px | Sidebar, tiny icons |
-| `MD` | 128px | Header, cards |
-| `LG` | 256px | Reports, challans |
-| `DARK` | — | Dark theme (future) |
-| `PRINT` | — | Print output (future) |
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `lib/s3.ts` | Shared S3 client singleton |
-| `lib/media/validate-image.ts` | Validates dimensions (128–4096), format, size (5 MB) |
-| `lib/media/generate-variants.ts` | Generates SM/MD/LG WEBP variants via sharp |
-| `lib/media/delete-file.ts` | Safe S3 object/prefix deletion |
-| `lib/media/index.ts` | Barrel export |
-| `app/api/media/logo/upload/route.ts` | Enterprise upload endpoint (FormData → validate → optimize → S3 → save) |
-| `app/api/media/logo/upload-url/route.ts` | Legacy pre-signed URL endpoint |
-| `app/api/media/logo/save/route.ts` | Legacy save endpoint |
-| `app/api/media/logo/rollback/route.ts` | Rollback to previous logo version |
-| `app/onboarding/branding/page.tsx` | Drag-and-drop upload UI with variant preview |
-
-### Versioning
-
-Files are never overwritten. Each upload increments the version:
-```
-organizations/{orgId}/branding/logo_v1_original.webp
-organizations/{orgId}/branding/logo_v1_sm.webp
-organizations/{orgId}/branding/logo_v2_original.webp  ← new version
-```
-
-Previous version S3 objects are deleted on new upload. MediaAsset rows are kept for audit.
-
-### Rollback
-
-`POST /api/media/logo/rollback` with `{ version: N }` — restores Organization branding fields from a previous MediaAsset version.
-
-### Constraints
-
-- Accepted types: PNG, JPG, WEBP, SVG
-- Min dimensions: 128×128
-- Max dimensions: 4096×4096
-- Max file size: 5 MB
-- Output format: WEBP (quality 85–90)
-
-### API Client
-
-`api.upload<T>(endpoint, formData)` method added to `lib/api-client.ts` for multipart uploads.
-Skips `Content-Type: application/json` header so browser sets multipart boundary automatically.
-
----
-
-## 16b. Registration Certificate PDF System
-
-### Overview
-
-Server-generated, 2-page landscape PDF using `@react-pdf/renderer`. Always rendered from database (source of truth), not client-side HTML snapshots.
-
-### Architecture
-
-```
-Browser → GET /api/onboarding/certificate?orgId=ORG-00002
-  → Auth check (session + membership or SUPER_ADMIN)
-  → Fetch Organization from DB
-  → Render React PDF → Stream buffer → Browser displays inline
-```
-
-### Pages
-
-| Page | Content | Layout |
-|------|---------|--------|
-| **Page 1** | Registration Certificate — gold borders, centered title, org name, ID, date, system stamp | Landscape A4, formal |
-| **Page 2** | Organization Profile — two-column layout: Basic Info + Contact (left), Address + Compliance (right) | Landscape A4, structured |
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `lib/pdf/styles.ts` | Shared StyleSheet definitions (certificate + profile) |
-| `lib/pdf/RegistrationPDF.tsx` | React PDF Document component (2 pages) |
-| `app/api/onboarding/certificate/route.tsx` | API route — auth, DB fetch, render, stream |
-| `app/onboarding/confirmation/page.tsx` | Confirmation page with embedded PDF viewer |
-
-### Features
-
-- PDF rendered server-side from `@react-pdf/renderer` (not jspdf/html2canvas)
-- QR verification code on Page 1 (points to `sms.sairex.edu.pk/verify/{certNo}`)
-- Certificate number: `SRC-{year}-{sequence}` (e.g., `SRC-2026-000002`)
-- System seal (gold circular "Sairex SMS Verified")
-- Gold double-border frame + "SAIREX" watermark
-- Embedded PDF preview via `<iframe>`
-- Print button opens PDF in new window for native browser print
-- Download button triggers file save as `{OrgID}.pdf`
-- Multi-tenant safe: membership + SUPER_ADMIN check
-- Filename: `{OrgID}.pdf`
-
----
-
-## 17. Scripts & Tooling
-
-### npm Scripts (`web/package.json`)
-
-| Script | Command | Purpose |
-|--------|---------|---------|
-| `postinstall` | `npx prisma generate --schema ../prisma/schema.prisma --generator jsClient` | Auto-generate Prisma client |
-| `dev` | `next dev` | Development server (Turbopack) |
-| `build` | `prisma generate ... && next build` | Production build with Prisma |
-| `start` | `next start` | Production server |
-| `lint` | `eslint` | Lint check |
-| `worker` | `npx tsx scripts/start-workers.ts` | Standalone worker process |
+| Script | Purpose |
+|--------|---------|
+| `postinstall` | Auto-generate Prisma client |
+| `dev` | Development server (Turbopack) |
+| `build` | Production build with Prisma generate |
+| `start` | Production server |
+| `lint` | ESLint check |
+| `worker` | Standalone worker process (all 15 queues) |
 
 ### Utility Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/seed-admin.ts` | Create root org (ORG-00001), SUPER_ADMIN user, org sequence |
-| `scripts/start-workers.ts` | Production worker runner (all 9 queues) |
-| `scripts/test-api-security.ts` | API security testing |
-| `scripts/test-password-flows.ts` | Password flow testing |
-| `scripts/test-signup-invites.ts` | Signup + invite flow testing |
-
-### Backend Python Scripts
-
-Located in `backend/`. These are utility/legacy scripts for direct DB operations:
-`add_student.py`, `admit_student.py`, `create_fee_structure.py`, `create_school.py`, `generate_challan.py`, `notification_service.py`, `onboard_saas.py`, `pay_challan.py`, `seed_fees.py`
+| `seed-admin.ts` | Create root org, SUPER_ADMIN user, sequence |
+| `seed-plan-features.ts` | Populate PlanFeature matrix (4 plans × 11 features) |
+| `start-workers.ts` | Production worker runner |
+| `test-api-security.ts` | API security testing |
 
 ---
 
-## 18. Known Issues & Technical Debt
+## 25. Enterprise Media Asset System
+
+AWS S3 with server-side image processing (sharp). Uploads validated, optimized to WEBP, stored as versioned variants (SM 64px, MD 128px, LG 256px, ORIGINAL). Rollback supported via MediaAsset audit table.
+
+Key endpoint: `POST /api/media/logo/upload` (FormData → validate → optimize → S3 → save).
+
+---
+
+## 26. Registration Certificate PDF System
+
+Server-generated 2-page landscape PDF via `@react-pdf/renderer`. Page 1: formal certificate with gold borders. Page 2: organization profile. Rendered from database, streamed inline.
+
+Endpoint: `GET /api/onboarding/certificate?orgId=ORG-00002`.
+
+---
+
+## 27. Known Issues & Technical Debt
 
 ### Bugs
 
-1. **SxAmount prop mismatch**: `finance/page.tsx` passes `value={...}` but `SxAmount` expects `amount={...}` → renders "Rs. NaN"
-2. **GET /api/jobs/[id]** has no org ownership check — any authenticated user can poll any job
+1. **SxAmount prop mismatch**: `finance/page.tsx` passes `value={...}` but `SxAmount` expects `amount={...}`
+2. **GET /api/jobs/[id]** has no org ownership check
 
 ### Non-compliance with Coding Standards
 
-Several admin pages don't fully comply with the enforced rules in `.cursor/rules/`:
-
 | Page | Issues |
 |------|--------|
-| `regions/page.tsx` | Uses inline `rules={{}}` instead of zodResolver (B8) |
-| `campuses/page.tsx` | Uses inline `rules={{}}` instead of zodResolver (B8) |
-| `students/page.tsx` | Uses inline `rules={{}}` instead of zodResolver (B8) |
-| `change-password/page.tsx` | Uses inline `rules={{}}` and manual validation (B8) |
-| `jobs/page.tsx` | Uses raw `<select>` element (B4) |
-| `dashboard/page.tsx` | Uses hardcoded color classes (B7) |
-| `forgot-password/page.tsx` | Uses raw `fetch()` instead of `api.post()` (B6) |
-| `reset-password/page.tsx` | Uses raw `fetch()` instead of `api.post()` (B6) |
+| `regions/page.tsx` | Inline `rules={{}}` instead of zodResolver (B8) |
+| `campuses/page.tsx` | Inline `rules={{}}` (B8) |
+| `students/page.tsx` | Inline `rules={{}}` (B8) |
+| `change-password/page.tsx` | Inline `rules={{}}` (B8) |
+| `jobs/page.tsx` | Raw `<select>` (B4) |
+| `dashboard/page.tsx` | Hardcoded color classes (B7) |
 
 ### Architecture Notes
 
-- **Prisma monorepo setup**: Schema at repo root, JS client generated to `web/lib/generated/prisma` with custom output + tsconfig path alias. Requires `npx prisma generate` after schema changes.
-- **WhatsApp client**: Puppeteer-based, requires headless Chrome, QR scan on first run. Not suitable for production without a dedicated WhatsApp Business API.
-- **PDF storage**: Generated to `public/generated/` — works in dev but needs cloud storage (S3) for production.
-- **Cron reminders**: Currently triggered manually via API call. Needs an external scheduler (cron job or cloud function) for automatic execution.
-- **Worker resilience**: If Redis is down, jobs are saved in Postgres but not processed until Redis returns and jobs are manually re-enqueued.
+- **Payment gateway adapters** are skeleton implementations — need real API credentials and endpoint URLs
+- **WhatsApp client** (whatsapp-web.js) for dev only — production requires WhatsApp Cloud API
+- **PDF storage** to `public/generated/` — needs S3 for production
+- **Campus health scores** need a scheduled job (daily cron) to auto-refresh
+- **Worker resilience** — if Redis is down, jobs saved in Postgres but not processed until Redis returns
 
 ---
 
-## 19. Coding Standards (Enforced Rules)
+## 28. Coding Standards (Enforced Rules)
 
-Two rule files in `.cursor/rules/` are enforced for all code generation:
+Two rule files in `.cursor/rules/`:
 
 ### Component Standards (`sairex-component-standards.mdc`)
 
-**Banned patterns in `web/app/admin/**`:**
-- No raw HTML: `<table>`, `<button>`, `<input>`, `<select>`, `<option>` → use Sx/shadcn components
-- No `alert()`/`confirm()`/`prompt()` → use `toast` from sonner
+**Banned in `web/app/admin/**`:**
+- No raw HTML: `<table>`, `<button>`, `<input>`, `<select>` → use Sx/shadcn
+- No `alert()`/`confirm()` → use `toast` from sonner
 - No raw `fetch()` → use `api` from `@/lib/api-client`
-- No hardcoded Tailwind color classes (e.g. `bg-blue-600`) → use design tokens only
+- No hardcoded Tailwind color classes → design tokens only
 - No `any` type annotations
-- No inline `rules={{}}` validation → use `zodResolver` + Zod schema
-- No custom modal `<div>` → use shadcn `Dialog`
-
-**Required design tokens** (allowed color classes):
-```
-bg-background, bg-card, bg-muted, bg-primary, bg-secondary, bg-accent,
-bg-destructive, bg-success/15, bg-warning/15, bg-info/15,
-text-foreground, text-muted-foreground, text-primary, text-destructive,
-text-success, text-warning, text-info,
-border-border, border-input, ring-ring
-```
+- No inline `rules={{}}` → use `zodResolver` + Zod schema
 
 ### API Patterns (`sairex-api-patterns.mdc`)
 
-**Client-side API calls must:**
-1. Use `api.get<T>()` / `api.post<T>()` etc. (never raw `fetch()`)
-2. Include type parameter: `api.get<Organization[]>(...)`
+1. Use `api.get<T>()` / `api.post<T>()` (never raw `fetch()`)
+2. Include type parameter
 3. Handle discriminated union: `if (result.ok) { ... } else if (result.fieldErrors) { ... } else { ... }`
-4. Map field errors to form: `form.setError(field, { message })`
+4. Map field errors to form via `form.setError()`
 5. Show toast on success/error
+
+---
+
+## 29. Mobile Action Dashboard - Master Build Plan
+
+Execution model for a production-grade mobile control center. Delivery is phase-locked: complete each phase, verify checklist, then proceed.
+
+### Phases
+
+| Phase | Output | Status |
+|------|--------|--------|
+| 1 | UX Architecture (action-based mobile structure) | Locked |
+| 2 | Data Contract (single source of truth API + types) | Locked |
+| 3 | State Layer (React Query + mobile context + offline foundation) | Locked |
+| 4 | UI Foundation (layout shell + bottom action bar) | Pending |
+| 5 | Core Action Cards (students/fees/attendance/exams) | Pending |
+| 6 | Smart Widgets (alerts/today/quick stats) | Pending |
+| 7 | Performance & Offline (cache polish + skeletons + PWA) | Pending |
+
+### Locked principles
+
+- Mobile is action-first, not a mini desktop dashboard.
+- Frontend does not hardcode role actions; backend returns payload-driven actions.
+- Context is tenant-safe and derived from authenticated user scope.
+- Payload model supports role, plan, feature flags, and multi-campus expansion.
+- UI prioritizes thumb-zone ergonomics and fast first paint.
+
+### Phase 1 (UX Architecture) checklist
+
+- Action-based layout, not menu tree
+- Role-driven payload model
+- Dynamic cards
+- Thumb-friendly action grid
+- Context bar (org/campus/role/sync)
+- Bottom action bar
+
+### Phase 2 (Data Contract) checklist
+
+- `GET /api/mobile/dashboard` as primary endpoint
+- Enum-based mobile route contract
+- Role-driven backend mapping
+- Plan enforcement flags in payload
+- Pre-aggregated KPI/alert/action sections
+- Offline metadata in response
+
+### Phase 2 (Data Contract) - Locked Spec
+
+#### Endpoint
+
+- `GET /api/mobile/dashboard`
+- Context is derived from authenticated session token.
+- Tenant safety rule: no `orgId` query parameter for normal access.
+
+#### Master payload contract
+
+```ts
+export type MobileDashboardPayload = {
+  context: {
+    orgId: string
+    orgName: string
+    campusId?: string
+    campusName?: string
+    role: UserRole
+    plan: PlanType
+  }
+  today: TodayItem[]
+  kpis: KPIItem[]
+  primaryActions: ActionItem[]
+  secondaryActions: ActionItem[]
+  alerts: AlertItem[]
+  meta: {
+    syncTime: string
+    pendingOfflineActions: number
+  }
+}
+```
+
+```ts
+type TodayItem = {
+  id: string
+  label: string
+  value: string
+  tone: "info" | "success" | "warning" | "danger"
+  icon: MobileIcon
+  action?: MobileRoute
+}
+```
+
+```ts
+type KPIItem = {
+  id: string
+  label: string
+  value: string
+  trend?: "up" | "down"
+  tone?: "default" | "success" | "danger"
+}
+```
+
+```ts
+type ActionItem = {
+  id: string
+  label: string
+  icon: MobileIcon
+  route: MobileRoute
+  tone?: "primary" | "success" | "warning"
+  badge?: string
+  disabled?: boolean
+}
+```
+
+```ts
+type AlertItem = {
+  id: string
+  title: string
+  description?: string
+  tone: "info" | "warning" | "danger"
+  actionLabel?: string
+  actionRoute?: MobileRoute
+}
+```
+
+#### Mobile route enum
+
+```ts
+export enum MobileRoute {
+  COLLECT_FEE = "COLLECT_FEE",
+  MARK_ATTENDANCE = "MARK_ATTENDANCE",
+  ADD_STUDENT = "ADD_STUDENT",
+  ISSUE_CHALLAN = "ISSUE_CHALLAN",
+  VIEW_DEFAULTERS = "VIEW_DEFAULTERS",
+}
+```
+
+#### Backend ownership
+
+- Role-to-action mapping lives in backend service logic, not in mobile UI.
+- Plan enforcement is attached in payload (`disabled`, `badge: "Upgrade"`).
+- Payload is pre-aggregated and Redis-cache-friendly by design.
+
+#### Backend files
+
+```text
+/app/api/mobile/dashboard/route.ts
+/lib/mobile/mobile-dashboard.service.ts
+/lib/mobile/mobile-dashboard.mapper.ts
+/lib/mobile/mobile-actions.registry.ts
+```
+
+#### Multi-campus extension (future-safe)
+
+- Planned endpoint: `POST /api/mobile/context/switch-campus`
+- Context payload remains source of truth for active org/campus.
+
+#### Completion checklist (locked)
+
+- Single endpoint in production
+- Role-driven backend mapping complete
+- Plan enforcement in payload
+- Enum-based route contract
+- Pre-aggregated KPI/today/action/alert data
+- Offline metadata included (`syncTime`, `pendingOfflineActions`)
+
+### Phase 3 (State Layer) checklist
+
+- Single `useMobileDashboard()` hook
+- React Query cache + background refresh
+- Persisted query cache foundation
+- Mobile context sourced from payload (not local overrides)
+- Sync freshness + pending offline action metadata
+- Optimistic action execution pattern scaffold
+
+### Phase 3 (State Layer) - Locked Spec
+
+#### Goal
+
+One hook powers the mobile dashboard end-to-end with fetch, cache, background sync, offline readiness, and action helpers.
+
+#### Core hook contract
+
+```ts
+useMobileDashboard()
+```
+
+- Uses React Query with:
+  - `queryKey: ["mobile-dashboard"]`
+  - `staleTime: 60 * 1000`
+  - `refetchInterval: 60 * 1000`
+  - `retry: 1`
+
+#### Fetcher contract
+
+- Fetches from `GET /api/mobile/dashboard`
+- Returns `MobileDashboardPayload`
+- Throws on non-OK response
+
+#### Offline cache strategy
+
+- Enable persisted query cache with:
+  - `persistQueryClient`
+  - `createSyncStoragePersister`
+  - `window.localStorage`
+- Last valid dashboard must render while offline.
+
+#### Sync status rules
+
+Derived from payload:
+
+- `meta.syncTime`
+- `meta.pendingOfflineActions`
+
+Computed UI flag:
+
+```ts
+isOutdated = now - syncTime > 2 minutes
+```
+
+#### Mobile context provider
+
+`MobileContextProvider` is sourced from payload only (tenant-safe), not local storage.
+
+```ts
+type MobileContext = {
+  orgId: string
+  campusId?: string
+  role: UserRole
+}
+```
+
+#### Action execution pattern
+
+All mutations run through `useMobileAction()`:
+
+1. Optimistic UI update
+2. Queue offline action when offline
+3. Sync queue on reconnect
+
+#### Offline queue foundation
+
+```ts
+mobileOfflineQueue: {
+  id
+  actionType
+  payload
+  createdAt
+}
+```
+
+Queue length feeds:
+
+- `meta.pendingOfflineActions`
+
+#### Selector helpers
+
+Hook exposes mapped dashboard sections directly (no fragile UI searching):
+
+- `today`
+- `kpis`
+- `primaryActions`
+- `secondaryActions`
+- `alerts`
+
+#### Final hook output shape
+
+```ts
+{
+  context
+  today
+  kpis
+  primaryActions
+  secondaryActions
+  alerts
+  sync
+  isLoading
+  isError
+  refresh
+}
+```
+
+#### Phase 3 file structure
+
+```text
+/lib/mobile/hooks/use-mobile-dashboard.ts
+/lib/mobile/mobile-context.tsx
+/lib/mobile/mobile-query-client.ts
+/lib/mobile/mobile-offline-queue.ts
+```
+
+#### Loading UX rule (mobile-grade)
+
+- Prefer skeleton/shimmer states over spinners:
+  - skeleton today card
+  - skeleton action grid
+  - shimmer KPI strip
+
+#### Completion checklist (locked)
+
+- Single master hook implemented
+- Persisted query cache enabled
+- Offline queue foundation created
+- Sync status logic implemented
+- Org/campus/role context sourced from payload only
+- Optimistic action pattern scaffolded
+
+### Phase 4 (Mobile UI Foundation) - Locked Spec
+
+#### Goal
+
+Deliver a production-ready mobile shell that all role actions plug into without redesign.
+
+#### Root mobile layout tree
+
+```text
+MobileDashboardLayout
+ ├─ SafeAreaContainer
+ │   ├─ ContextBar
+ │   ├─ ScrollArea
+ │   │   ├─ TodayFocusCard
+ │   │   ├─ PrimaryActionGrid
+ │   │   ├─ KPIHorizontalStrip
+ │   │   └─ AlertStack
+ │   └─ BottomActionBar
+```
+
+#### Component blueprint
+
+```text
+/components/mobile/
+  mobile-container.tsx
+  context-bar.tsx
+  today-focus-card.tsx
+  primary-action-grid.tsx
+  kpi-strip.tsx
+  alert-stack.tsx
+  bottom-action-bar.tsx
+```
+
+#### Safe area container contract
+
+- Full-height mobile surface
+- Bottom padding reserved for fixed thumb-zone nav bar
+- Token-based background (`bg-background`)
+
+#### Context bar contract
+
+Displays:
+
+- org name
+- campus name / selector placeholder
+- role badge
+- sync status (`Live`, `Syncing`, `Offline`)
+
+#### Today Focus card contract
+
+- Renders `today[]` items from payload
+- 2-per-row mobile-friendly grid
+- no hardcoded copy
+
+#### Primary action grid contract
+
+- Uses `primaryActions[]` from payload
+- 2x2 thumb-friendly layout
+- large tap target (~88px height)
+- action tone maps to semantic tokens
+
+#### KPI strip contract
+
+- Horizontal scroll for compact KPI cards
+- Powered by `kpis[]` only
+- no UI-level metric derivation
+
+#### Alert stack contract
+
+- Priority tones:
+  - danger -> destructive style
+  - warning -> warning style
+  - info -> neutral/info style
+- Supports optional CTA via `actionLabel` + deep link route
+
+#### Bottom action bar contract
+
+- Fixed bar in thumb zone
+- baseline tabs:
+  - Home
+  - Actions
+  - Search
+  - Notifications
+  - Profile
+
+#### Page implementation target
+
+```text
+/app/mobile/dashboard/page.tsx
+```
+
+Uses:
+
+- `useMobileDashboard()` for all data
+- skeleton layout for first paint
+- cached render for background refresh
+
+#### Theme constraints
+
+- Use semantic SAIREX tokens only (`bg-primary`, `bg-success`, `bg-warning`, `bg-destructive`, etc.)
+- avoid hardcoded Tailwind color scales in component styles
+
+#### Completion checklist (locked)
+
+- Safe-area mobile container built
+- Context bar shows org/campus/role/sync
+- Today Focus grid rendered
+- 2x2 primary action grid rendered
+- Horizontal KPI strip rendered
+- Alert stack rendered
+- Fixed bottom action bar rendered
+- Semantic token theming applied
+
+---
+
+## 29. Phase 8 Completion + Phase 9 Revenue Optimization (Step 1)
+
+### Phase 8 Completion Status
+
+The following Phase 8 delivery items are incorporated in code:
+
+- **10-minute onboarding wizard:** public wizard flow and step APIs (`app/(public)/onboarding/*`, `app/api/onboarding/wizard/*`)
+- **QR-based parent/staff join:** QR token generation, resolve, and claim (`lib/adoption/qr-invite.service.ts`, `app/join/page.tsx`, `app/api/invite/*`)
+- **Zero-training SIMPLE mode:** persisted organization mode with runtime toggle (`lib/system/mode.service.ts`, `app/api/organizations/mode/route.ts`, `app/admin/ModeToggleButton.tsx`)
+- **One-click demo school generator:** super-admin endpoint + seeded demo orchestration (`app/api/super-admin/demo/generate/route.ts`, `lib/demo/demo-generator.service.ts`)
+
+### Phase 9 Step 1 Status (Pricing Architecture)
+
+Step 1 success criteria are implemented:
+
+- [x] Pricing tiers defined
+- [x] Feature mapping clear
+- [x] Student-based billing logic aligned
+- [x] Trial strategy defined
+- [x] Upgrade path clear (SIMPLE -> PRO)
+
+### Plan Naming Alignment (Canonical Contract)
+
+Use this mapping to avoid naming drift between internal entitlement logic and public pricing communication:
+
+| Internal `PlanType` | Public Tier | Notes |
+|---------------------|-------------|-------|
+| FREE | STARTER | Default persisted plan with trial overlays |
+| BASIC | STARTER | Legacy/internal transitional plan; still maps to STARTER for commercial communication |
+| PRO | PROFESSIONAL | Predictive and advanced operations tier |
+| ENTERPRISE | ENTERPRISE | Chain and custom-commercial tier |
+
+### APIs Exposing Revenue Optimization Data
+
+- `GET /api/billing/plan-usage` — plan, usage/limits, PKR student pricing range, trial state, and upgrade recommendation
+- `GET/PATCH /api/billing/config` — per-student fee and cycle config controls
+- `GET /api/organizations/mode` and `PATCH /api/organizations/mode` — SIMPLE/PRO mode control surface
 
 ---
 

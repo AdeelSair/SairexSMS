@@ -367,6 +367,21 @@ model QrToken {
   @@index([referenceId])
 }
 
+model QRInviteToken {
+  id             String   @id @default(uuid())
+  organizationId String   @db.VarChar(11)
+  role           String
+  expiresAt      DateTime
+  maxUses        Int?
+  usedCount      Int      @default(0)
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([organizationId, role])
+  @@index([expiresAt])
+}
+
 enum QrTokenType {
   FEE_PAYMENT
   PARENT_ACCESS
@@ -424,13 +439,29 @@ enum PlanType {
   ENTERPRISE
 }
 
+enum RevenueCycleStatus {
+  OPEN
+  CLOSED
+}
+
+enum RevenueCalculationMode {
+  ON_GENERATED_FEE
+  ON_COLLECTED_FEE
+}
+
 model OrganizationPlan {
   id             String   @id @default(cuid())
   organizationId String   @unique @db.VarChar(11)
   planType       PlanType @default(FREE)
   active         Boolean  @default(true)
+  trialPlanType  PlanType? @default(PRO)
+  trialStartedAt DateTime?
+  trialEndsAt    DateTime?
   maxStudents    Int?
   maxCampuses    Int?
+  revenueCalculationMode RevenueCalculationMode @default(ON_GENERATED_FEE)
+  perStudentFee          Decimal                @default(0) @db.Decimal(12, 2)
+  closingDay             Int                    @default(10)
   expiresAt      DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -489,7 +520,7 @@ model FeeTemplate {
 
 model CampusHealthScore {
   organizationId   String  @db.VarChar(11)
-  campusId         Int
+  campusId         Int     @unique
   collectionRate   Decimal @default(0) @db.Decimal(5, 2)
   attendanceRate   Decimal @default(0) @db.Decimal(5, 2)
   academicScore    Decimal @default(0) @db.Decimal(5, 2)
@@ -534,6 +565,8 @@ model Organization {
   id             String             @id @db.VarChar(11)
   slug           String             @unique
   status         OrganizationStatus @default(ACTIVE)
+  mode           String             @default("SIMPLE")
+  isDemo         Boolean            @default(false)
   onboardingStep OnboardingStep     @default(ORG_IDENTITY)
 
   createdByUserId Int
@@ -580,6 +613,8 @@ model Organization {
 
   /// Finance
   financeRoutingMode FinanceRoutingMode @default(CAMPUS_PRIMARY)
+  timezone           String             @default("Asia/Karachi")
+  demoSeededAt      DateTime?
 
   // Relations
   memberships Membership[]
@@ -609,6 +644,8 @@ model Organization {
   ledgerEntries      LedgerEntry[]
   financialSummaries StudentFinancialSummary[]
   postingRuns        PostingRun[]
+  revenueCycles      RevenueCycle[]
+  revenueAdjustments RevenueAdjustment[]
   reminderRules      ReminderRule[]
   reminderLogs       ReminderLog[]
   academicYears      AcademicYear[]
@@ -1484,6 +1521,49 @@ model PostingRun {
   @@index([status])
 }
 
+model RevenueCycle {
+  id             String @id @default(cuid())
+  organizationId String @db.VarChar(11)
+
+  month Int
+  year  Int
+
+  revenueCalculationModeUsed RevenueCalculationMode
+  perStudentFeeUsed          Decimal                @db.Decimal(12, 2)
+  closingDayUsed             Int                    @default(10)
+  totalStudents              Int                    @default(0)
+  generatedAmount            Decimal                @default(0) @db.Decimal(12, 2)
+  collectedAmount            Decimal                @default(0) @db.Decimal(12, 2)
+  sairexRevenue              Decimal                @default(0) @db.Decimal(12, 2)
+  status                     RevenueCycleStatus     @default(OPEN)
+
+  closedAt   DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adjustments  RevenueAdjustment[]
+
+  @@unique([organizationId, month, year])
+  @@index([organizationId, status])
+}
+
+model RevenueAdjustment {
+  id             String @id @default(cuid())
+  revenueCycleId String
+  organizationId String @db.VarChar(11)
+  amount         Decimal @db.Decimal(12, 2)
+  reason         String
+  createdBy      String
+  createdAt      DateTime @default(now())
+
+  revenueCycle RevenueCycle @relation(fields: [revenueCycleId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([revenueCycleId])
+  @@index([organizationId, createdAt])
+}
+
 ////////////////////////////////////////////////////////////
 /// REMINDER ENGINE (Automated Collection)
 ////////////////////////////////////////////////////////////
@@ -1795,6 +1875,57 @@ model Job {
   @@index([organizationId])
   @@index([queue, priority])
   @@index([referenceId, referenceType])
+}
+
+model MobileActionLog {
+  id              String   @id @default(uuid())
+  organizationId  String   @db.VarChar(11)
+  userId          String
+  actionType      String
+  actionKey       String
+  lastShownAt     DateTime
+  lastActedAt     DateTime?
+  escalationLevel Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, userId])
+  @@unique([organizationId, userId, actionKey])
+}
+
+model OperationalRiskSnapshot {
+  id             String   @id @default(uuid())
+  organizationId String   @db.VarChar(11)
+  score          Int
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([organizationId, createdAt])
+}
+
+model OperationalBriefSnapshot {
+  id             String   @id @default(uuid())
+  organizationId String   @db.VarChar(11)
+  text           String   @db.Text
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([organizationId, createdAt])
+}
+
+model OnboardingDraft {
+  id             String   @id @default(cuid())
+  token          String   @unique
+  schoolInfo     Json?
+  academicSetup  Json?
+  feeSetup       Json?
+  adminSetup     Json?
+  status         String   @default("DRAFT")
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, createdAt])
 }
 
 ////////////////////////////////////////////////////////////

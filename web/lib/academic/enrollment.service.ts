@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { EnrollmentStatus } from "@/lib/generated/prisma";
 import { requireActiveAcademicYear, assertYearOpen } from "./academic-year.service";
 import { emit } from "@/lib/events";
+import { emitActionUpdated } from "@/lib/events/action-events";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -71,6 +72,24 @@ export interface EnrollmentListParams {
   offset?: number;
 }
 
+export interface UnenrolledStudentsParams {
+  scope: EnrollmentScopeFilter;
+  academicYearId: string;
+  campusId: number;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SectionEnrollmentsParams {
+  scope: EnrollmentScopeFilter;
+  academicYearId: string;
+  sectionId: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface EnrollmentRow {
   id: string;
   studentId: number;
@@ -84,6 +103,29 @@ export interface EnrollmentRow {
   rollNumber: string | null;
   status: EnrollmentStatus;
   enrolledAt: Date;
+}
+
+export interface UnenrolledStudentRow {
+  id: number;
+  fullName: string;
+  admissionNo: string;
+  campusId: number;
+}
+
+export interface SectionEnrollmentRow {
+  id: string;
+  studentId: number;
+  studentName: string;
+  admissionNo: string;
+  rollNumber: string | null;
+  status: EnrollmentStatus;
+  enrolledAt: Date;
+}
+
+export interface BulkEnrollStudentsInput {
+  organizationId: string;
+  sectionId: string;
+  studentIds: number[];
 }
 
 /* ── Enroll Student ─────────────────────────────────────── */
@@ -131,6 +173,10 @@ export async function enrollStudent(input: EnrollStudentInput) {
       classId,
       sectionId,
     }).catch(() => {});
+    emitActionUpdated({
+      orgId: organizationId,
+      type: "ADMISSION_ENQUIRY",
+    });
 
     return enrollment;
   });
@@ -245,6 +291,10 @@ export async function withdrawStudent(enrollmentId: string, organizationId: stri
     campusId: enrollment.campusId,
     academicYearId: enrollment.academicYearId,
   }).catch(() => {});
+  emitActionUpdated({
+    orgId: organizationId,
+    type: "ADMISSION_ENQUIRY",
+  });
 
   return updated;
 }
@@ -311,6 +361,8 @@ export async function promoteStudent(input: PromoteInput) {
 /* ── Bulk Promote ───────────────────────────────────────── */
 
 const PROMOTE_BATCH = 200;
+const ENROLLMENT_LIST_DEFAULT_LIMIT = 100;
+const ENROLLMENT_LIST_MAX_LIMIT = 300;
 
 export async function bulkPromote(input: BulkPromoteInput) {
   const { organizationId, sourceYearId, targetYearId, mappings } = input;
@@ -471,6 +523,192 @@ export async function listEnrollments(params: EnrollmentListParams): Promise<{
     })),
     total,
   };
+}
+
+export async function listUnenrolledStudents(
+  params: UnenrolledStudentsParams,
+): Promise<{ rows: UnenrolledStudentRow[]; total: number }> {
+  const { scope, academicYearId, campusId, search, limit, offset = 0 } = params;
+  const safeLimit = Math.min(
+    Math.max(limit ?? ENROLLMENT_LIST_DEFAULT_LIMIT, 1),
+    ENROLLMENT_LIST_MAX_LIMIT,
+  );
+
+  const where: Record<string, unknown> = {
+    organizationId: scope.organizationId,
+    campusId,
+    enrollments: {
+      none: { academicYearId },
+    },
+  };
+
+  if (search) {
+    where.OR = [
+      { fullName: { contains: search, mode: "insensitive" } },
+      { admissionNo: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  const [rows, total] = await prisma.$transaction([
+    prisma.student.findMany({
+      where,
+      orderBy: [{ fullName: "asc" }],
+      skip: offset,
+      take: safeLimit,
+      select: {
+        id: true,
+        fullName: true,
+        admissionNo: true,
+        campusId: true,
+      },
+    }),
+    prisma.student.count({ where }),
+  ]);
+
+  return { rows, total };
+}
+
+export async function listEnrollmentsBySection(
+  params: SectionEnrollmentsParams,
+): Promise<{ rows: SectionEnrollmentRow[]; total: number }> {
+  const { scope, academicYearId, sectionId, search, limit, offset = 0 } = params;
+  const safeLimit = Math.min(
+    Math.max(limit ?? ENROLLMENT_LIST_DEFAULT_LIMIT, 1),
+    ENROLLMENT_LIST_MAX_LIMIT,
+  );
+
+  const where: Record<string, unknown> = {
+    organizationId: scope.organizationId,
+    academicYearId,
+    sectionId,
+    status: "ACTIVE",
+  };
+
+  if (scope.campusId) {
+    where.campusId = scope.campusId;
+  } else if (scope.unitPath) {
+    where.campus = { fullUnitPath: { startsWith: scope.unitPath } };
+  }
+
+  if (search) {
+    where.student = {
+      OR: [
+        { fullName: { contains: search, mode: "insensitive" } },
+        { admissionNo: { contains: search, mode: "insensitive" } },
+      ],
+    };
+  }
+
+  const [rows, total] = await prisma.$transaction([
+    prisma.studentEnrollment.findMany({
+      where,
+      orderBy: [{ rollNumber: "asc" }, { student: { fullName: "asc" } }],
+      skip: offset,
+      take: safeLimit,
+      include: {
+        student: {
+          select: {
+            fullName: true,
+            admissionNo: true,
+          },
+        },
+      },
+    }),
+    prisma.studentEnrollment.count({ where }),
+  ]);
+
+  return {
+    rows: rows.map((row) => ({
+      id: row.id,
+      studentId: row.studentId,
+      studentName: row.student.fullName,
+      admissionNo: row.student.admissionNo,
+      rollNumber: row.rollNumber,
+      status: row.status,
+      enrolledAt: row.enrolledAt,
+    })),
+    total,
+  };
+}
+
+export async function bulkEnrollStudents(input: BulkEnrollStudentsInput) {
+  const { organizationId, sectionId, studentIds } = input;
+
+  if (studentIds.length === 0) {
+    throw new EnrollmentError("At least one student is required");
+  }
+
+  const uniqueStudentIds = Array.from(new Set(studentIds));
+
+  return prisma.$transaction(async (tx) => {
+    const activeYear = await requireActiveAcademicYear(organizationId);
+
+    const section = await tx.section.findUnique({
+      where: { id: sectionId },
+      select: {
+        id: true,
+        organizationId: true,
+        academicYearId: true,
+        campusId: true,
+        classId: true,
+        status: true,
+      },
+    });
+
+    if (!section || section.organizationId !== organizationId) {
+      throw new EnrollmentError("Section not found");
+    }
+    if (section.status !== "ACTIVE") {
+      throw new EnrollmentError("Section is not active");
+    }
+    if (section.academicYearId !== activeYear.id) {
+      throw new EnrollmentError("Section does not belong to active academic year");
+    }
+
+    const students = await tx.student.findMany({
+      where: {
+        id: { in: uniqueStudentIds },
+        organizationId,
+        campusId: section.campusId,
+      },
+      select: { id: true },
+    });
+
+    const validStudentIds = new Set(students.map((s) => s.id));
+    const invalidStudentIds = uniqueStudentIds.filter((id) => !validStudentIds.has(id));
+
+    const existing = await tx.studentEnrollment.findMany({
+      where: {
+        studentId: { in: Array.from(validStudentIds) },
+        academicYearId: activeYear.id,
+      },
+      select: { studentId: true },
+    });
+
+    const alreadyEnrolledSet = new Set(existing.map((row) => row.studentId));
+    const toCreate = Array.from(validStudentIds).filter((id) => !alreadyEnrolledSet.has(id));
+
+    if (toCreate.length > 0) {
+      await tx.studentEnrollment.createMany({
+        data: toCreate.map((studentId) => ({
+          organizationId,
+          studentId,
+          academicYearId: activeYear.id,
+          campusId: section.campusId,
+          classId: section.classId,
+          sectionId: section.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return {
+      requested: uniqueStudentIds.length,
+      created: toCreate.length,
+      alreadyEnrolled: alreadyEnrolledSet.size,
+      invalidStudentIds,
+    };
+  });
 }
 
 /* ── Get Single Enrollment (with history chain) ─────────── */

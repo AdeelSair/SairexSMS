@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import type { PaymentChannel, Prisma } from "@/lib/generated/prisma";
 import { emit } from "@/lib/events";
+import { logger } from "@/lib/logger";
+import { emitActionUpdated } from "@/lib/events/action-events";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -13,6 +15,7 @@ export interface RecordPaymentInput {
   paymentChannel: PaymentChannel;
   paidAt: Date;
   challanId?: number;
+  idempotencyKey?: string;
   rawPayload?: Record<string, unknown>;
 }
 
@@ -82,6 +85,7 @@ export async function recordPayment(input: RecordPaymentInput) {
     paymentChannel,
     paidAt,
     challanId,
+    idempotencyKey,
     rawPayload,
   } = input;
 
@@ -106,6 +110,7 @@ export async function reconcilePayment(
   input: ReconcileInput,
 ): Promise<ReconciliationResult> {
   const { paymentRecordId, challanId, organizationId } = input;
+  logger.info({ paymentRecordId, challanId, orgId: organizationId }, "Reconciliation started");
 
   return prisma.$transaction(async (tx) => {
     const payment = await tx.paymentRecord.findUniqueOrThrow({
@@ -180,6 +185,8 @@ export async function reconcilePayment(
       ledgerEntryId: ledgerEntry.id,
     };
 
+    logger.info({ paymentRecordId: payment.id, challanId: challan.id, studentId: challan.studentId, amount: paymentAmt, status: newStatus, orgId: organizationId }, "Reconciliation completed");
+
     emit("PaymentReconciled", organizationId, {
       paymentRecordId: payment.id,
       challanId: challan.id,
@@ -190,6 +197,10 @@ export async function reconcilePayment(
       newPaidAmount,
       ledgerEntryId: ledgerEntry.id,
     }).catch(() => {});
+    emitActionUpdated({
+      orgId: organizationId,
+      type: "FEE_COLLECTION",
+    });
 
     return result;
   });
@@ -209,10 +220,11 @@ export async function recordAndReconcile(
     paymentChannel,
     paidAt,
     challanId,
+    idempotencyKey,
     rawPayload,
   } = input;
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const challan = await tx.feeChallan.findUniqueOrThrow({
       where: { id: challanId },
     });
@@ -233,6 +245,8 @@ export async function recordAndReconcile(
         currency,
         transactionRef: transactionRef ?? null,
         paymentChannel,
+        gateway: "MANUAL",
+        gatewayRef: idempotencyKey ?? null,
         paidAt,
         challanId,
         status: "RECONCILED",
@@ -277,6 +291,13 @@ export async function recordAndReconcile(
       ledgerEntryId: ledgerEntry.id,
     };
   });
+
+  emitActionUpdated({
+    orgId: organizationId,
+    type: "FEE_COLLECTION",
+  });
+
+  return result;
 }
 
 /* ── Reverse Payment (Refund) ───────────────────────────── */

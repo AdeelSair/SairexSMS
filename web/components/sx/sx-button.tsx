@@ -68,6 +68,21 @@ const SxButton = forwardRef<HTMLButtonElement, SxButtonProps>(
     ref,
   ) => {
     const { variant, extra } = variantMap[sxVariant];
+    const isAsChild = props.asChild === true;
+
+    if (isAsChild) {
+      return (
+        <Button
+          ref={ref}
+          variant={variant}
+          disabled={disabled || loading}
+          className={cn("gap-2", extra, className)}
+          {...props}
+        >
+          {children}
+        </Button>
+      );
+    }
 
     return (
       <Button

@@ -5,6 +5,8 @@ import { generateOrganizationId } from "@/lib/id-generators";
 import { onboardingCompleteSchema } from "@/lib/validations/onboarding";
 import { generateUnitCode, generateCityCode, buildFullUnitPath } from "@/lib/unit-code";
 import { createUnitProfile } from "@/lib/unit-profile";
+import { bootstrapDemoDataIfEmpty } from "@/lib/bootstrap/demo-seed.service";
+import { TRIAL_POLICY, createTrialWindow } from "@/lib/billing/pricing-architecture";
 
 function slugify(name: string): string {
   return name
@@ -70,6 +72,7 @@ export async function POST(request: Request) {
 
     const orgId = await generateOrganizationId();
 
+    const trialWindow = createTrialWindow();
     const result = await prisma.$transaction(async (tx) => {
       /* ── 1. Create Organization ─────────────────────────── */
       const created = await tx.organization.create({
@@ -105,6 +108,19 @@ export async function POST(request: Request) {
           websiteUrl: branding.websiteUrl || null,
           logoUrl: branding.logoUrl || null,
         },
+      });
+
+      await tx.organizationPlan.upsert({
+        where: { organizationId: created.id },
+        create: {
+          organizationId: created.id,
+          planType: "FREE",
+          active: true,
+          trialPlanType: TRIAL_POLICY.trialPlanType,
+          trialStartedAt: trialWindow.trialStartedAt,
+          trialEndsAt: trialWindow.trialEndsAt,
+        },
+        update: {},
       });
 
       /* ── 2. Auto-create main campus for SINGLE structure ── */
@@ -161,9 +177,12 @@ export async function POST(request: Request) {
       return { org: created, membership, mainCampusId };
     });
 
+    const demoSeed = await bootstrapDemoDataIfEmpty(result.org.id);
+
     return NextResponse.json(
       {
         ...result.org,
+        demoSeed,
         membership: {
           id: result.membership.id,
           role: result.membership.role,

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Hash } from "lucide-react";
+import { Plus, Hash, SlidersHorizontal, CircleHelp } from "lucide-react";
 
 import { api } from "@/lib/api-client";
 import {
@@ -14,6 +14,7 @@ import {
   ORGANIZATION_STATUS,
   type CreateOrganizationInput,
 } from "@/lib/validations/organization";
+import { billingConfigSchema, type BillingConfigInput } from "@/lib/validations";
 
 import {
   SxPageHeader,
@@ -37,6 +38,7 @@ import {
   FormItem,
   FormLabel,
   FormControl,
+  FormDescription,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -47,6 +49,12 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 /* ══════════════════════════════════════════════════════════════
    Types
@@ -65,6 +73,13 @@ interface Organization {
   organizationPhone: string | null;
   city: string | null;
   createdAt: string;
+}
+
+interface BillingConfig {
+  organizationId: string;
+  perStudentFee: number;
+  revenueCalculationMode: "ON_GENERATED_FEE" | "ON_COLLECTED_FEE";
+  closingDay: number;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -172,6 +187,9 @@ export default function OrganizationsPage() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [nextId, setNextId] = useState<string>("");
+  const [isBillingDialogOpen, setIsBillingDialogOpen] = useState(false);
+  const [selectedOrgForBilling, setSelectedOrgForBilling] = useState<Organization | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
 
   /* ── Data fetching ──────────────────────────────────────── */
 
@@ -204,6 +222,15 @@ export default function OrganizationsPage() {
     },
   });
 
+  const billingForm = useForm<BillingConfigInput>({
+    resolver: zodResolver(billingConfigSchema),
+    defaultValues: {
+      perStudentFee: "0",
+      revenueCalculationMode: "ON_GENERATED_FEE",
+      closingDay: "10",
+    },
+  });
+
   const {
     handleSubmit,
     reset,
@@ -232,6 +259,93 @@ export default function OrganizationsPage() {
       toast.error(result.error);
     }
   };
+
+  const openBillingDialog = useCallback(async (org: Organization) => {
+    setSelectedOrgForBilling(org);
+    setIsBillingDialogOpen(true);
+    setBillingLoading(true);
+
+    const result = await api.get<{ ok: boolean; data: BillingConfig; error?: string }>(
+      `/api/billing/config?orgId=${org.id}`,
+    );
+
+    if (!result.ok) {
+      toast.error(result.error);
+      setBillingLoading(false);
+      return;
+    }
+
+    if (!result.data.ok) {
+      toast.error(result.data.error ?? "Failed to load billing config");
+      setBillingLoading(false);
+      return;
+    }
+
+    billingForm.reset({
+      perStudentFee: String(result.data.data.perStudentFee),
+      revenueCalculationMode: result.data.data.revenueCalculationMode,
+      closingDay: String(result.data.data.closingDay),
+    });
+    setBillingLoading(false);
+  }, [billingForm]);
+
+  const onBillingSubmit = async (data: BillingConfigInput) => {
+    if (!selectedOrgForBilling) return;
+
+    const result = await api.patch<{ ok: boolean; data: BillingConfig; error?: string }>(
+      "/api/billing/config",
+      {
+        orgId: selectedOrgForBilling.id,
+        perStudentFee: Number(data.perStudentFee),
+        revenueCalculationMode: data.revenueCalculationMode,
+        closingDay: Number(data.closingDay),
+      },
+    );
+
+    if (!result.ok) {
+      if (result.fieldErrors) {
+        for (const [field, messages] of Object.entries(result.fieldErrors)) {
+          billingForm.setError(field as keyof BillingConfigInput, {
+            message: messages[0],
+          });
+        }
+        toast.error("Please fix the validation errors");
+        return;
+      }
+      toast.error(result.error);
+      return;
+    }
+    if (!result.data.ok) {
+      toast.error(result.data.error ?? "Failed to update billing config");
+      return;
+    }
+
+    toast.success("Billing configuration updated");
+    setIsBillingDialogOpen(false);
+    setSelectedOrgForBilling(null);
+  };
+
+  const columnsWithActions = useMemo<SxColumn<Organization>[]>(
+    () => [
+      ...columns,
+      {
+        key: "actions",
+        header: "",
+        width: "w-24",
+        render: (row) => (
+          <SxButton
+            sxVariant="outline"
+            className="h-8"
+            onClick={() => openBillingDialog(row)}
+            icon={<SlidersHorizontal size={14} />}
+          >
+            Billing
+          </SxButton>
+        ),
+      },
+    ],
+    [openBillingDialog],
+  );
 
   /* ── Dialog open/close ──────────────────────────────────── */
 
@@ -271,7 +385,7 @@ export default function OrganizationsPage() {
 
       {/* ── Data Table ────────────────────────────────────── */}
       <SxDataTable
-        columns={columns as unknown as SxColumn<Record<string, unknown>>[]}
+        columns={columnsWithActions as unknown as SxColumn<Record<string, unknown>>[]}
         data={orgs as unknown as Record<string, unknown>[]}
         loading={loading}
         emptyMessage="No organizations found. Create one to get started."
@@ -465,6 +579,147 @@ export default function OrganizationsPage() {
                   loading={isSubmitting}
                 >
                   Create Organization
+                </SxButton>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isBillingDialogOpen}
+        onOpenChange={(open) => {
+          setIsBillingDialogOpen(open);
+          if (!open) setSelectedOrgForBilling(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>SAIREX Revenue Configuration</DialogTitle>
+            <DialogDescription>
+              {selectedOrgForBilling
+                ? `Configure revenue policy for ${selectedOrgForBilling.organizationName}.`
+                : "Configure organization billing policy."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...billingForm}>
+            <form
+              onSubmit={billingForm.handleSubmit(onBillingSubmit)}
+              className="space-y-6"
+            >
+              <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm">
+                Super Admin control plane for tenant revenue policy.
+              </div>
+
+              <SxFormSection columns={1}>
+                <FormField
+                  control={billingForm.control}
+                  name="perStudentFee"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Per Student Fee (PKR)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="e.g. 30"
+                          {...field}
+                          disabled={billingLoading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SxFormSection>
+
+              <SxFormSection columns={1}>
+                <FormField
+                  control={billingForm.control}
+                  name="revenueCalculationMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Revenue Mode</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={billingLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="ON_GENERATED_FEE">
+                            On Generated Fee
+                          </SelectItem>
+                          <SelectItem value="ON_COLLECTED_FEE">
+                            On Collected Fee
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SxFormSection>
+
+              <SxFormSection columns={1}>
+                <FormField
+                  control={billingForm.control}
+                  name="closingDay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center gap-2">
+                        <FormLabel>Closing Day (1-28)</FormLabel>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex cursor-help text-muted-foreground">
+                                <CircleHelp size={14} />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" sideOffset={8}>
+                              Cycle closes on this day of next month.
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={28}
+                          placeholder="10"
+                          {...field}
+                          disabled={billingLoading}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Cycle closes on this day of next month.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SxFormSection>
+
+              <DialogFooter>
+                <SxButton
+                  type="button"
+                  sxVariant="outline"
+                  onClick={() => setIsBillingDialogOpen(false)}
+                >
+                  Cancel
+                </SxButton>
+                <SxButton
+                  type="submit"
+                  sxVariant="primary"
+                  loading={billingForm.formState.isSubmitting}
+                >
+                  Save Billing Config
                 </SxButton>
               </DialogFooter>
             </form>

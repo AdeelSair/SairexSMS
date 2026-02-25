@@ -42,6 +42,24 @@ export {
   type SignupData,
 } from "./signup";
 
+// Class & Section
+export {
+  createClassSchema,
+  createSectionSchema,
+  type CreateClassInput,
+  type CreateClassData,
+  type CreateSectionInput,
+  type CreateSectionData,
+} from "./class-section";
+
+// Academic Year
+export {
+  academicYearSchema,
+  ACADEMIC_YEAR_STATUS,
+  type AcademicYearInput,
+  type AcademicYearData,
+} from "./academic-year";
+
 // Onboarding (4-step wizard)
 export {
   onboardingIdentitySchema,
@@ -62,3 +80,17 @@ export {
   type OnboardingCompleteInput,
   type OnboardingCompleteData,
 } from "./onboarding";
+
+// Payment Entry
+export {
+  paymentEntrySchema,
+  type PaymentEntryInput,
+} from "./payment-entry";
+
+// Billing Config
+export {
+  billingConfigSchema,
+  billingConfigUpdateSchema,
+  type BillingConfigInput,
+  type BillingConfigUpdateInput,
+} from "./billing-config";

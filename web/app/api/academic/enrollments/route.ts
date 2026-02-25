@@ -4,6 +4,9 @@ import {
   enrollStudent,
   listEnrollments,
   getEnrollmentStats,
+  listUnenrolledStudents,
+  listEnrollmentsBySection,
+  bulkEnrollStudents,
   bulkPromote,
   EnrollmentError,
 } from "@/lib/academic/enrollment.service";
@@ -54,6 +57,61 @@ export async function GET(request: Request) {
         );
       }
       const data = await getEnrollmentStats(scope, academicYearId);
+      return NextResponse.json({ ok: true, data });
+    }
+
+    if (view === "unenrolled") {
+      if (!academicYearId) {
+        return NextResponse.json(
+          { ok: false, error: "academicYearId is required for unenrolled view" },
+          { status: 400 },
+        );
+      }
+
+      const campusId = campusIdParam ? Number(campusIdParam) : guard.campusId;
+      if (!campusId) {
+        return NextResponse.json(
+          { ok: false, error: "campusId is required for unenrolled view" },
+          { status: 400 },
+        );
+      }
+
+      const data = await listUnenrolledStudents({
+        scope,
+        academicYearId,
+        campusId,
+        search: searchParams.get("search") ?? undefined,
+        limit: searchParams.get("limit") ? Number(searchParams.get("limit")) : undefined,
+        offset: searchParams.get("offset") ? Number(searchParams.get("offset")) : undefined,
+      });
+
+      return NextResponse.json({ ok: true, data });
+    }
+
+    if (view === "section") {
+      const sectionId = searchParams.get("sectionId");
+      if (!sectionId) {
+        return NextResponse.json(
+          { ok: false, error: "sectionId is required for section view" },
+          { status: 400 },
+        );
+      }
+      if (!academicYearId) {
+        return NextResponse.json(
+          { ok: false, error: "academicYearId is required for section view" },
+          { status: 400 },
+        );
+      }
+
+      const data = await listEnrollmentsBySection({
+        scope,
+        academicYearId,
+        sectionId,
+        search: searchParams.get("search") ?? undefined,
+        limit: searchParams.get("limit") ? Number(searchParams.get("limit")) : undefined,
+        offset: searchParams.get("offset") ? Number(searchParams.get("offset")) : undefined,
+      });
+
       return NextResponse.json({ ok: true, data });
     }
 
@@ -128,6 +186,26 @@ export async function POST(request: Request) {
         sourceYearId,
         targetYearId,
         mappings,
+      });
+
+      return NextResponse.json({ ok: true, data: result });
+    }
+
+    if (body.action === "bulkEnroll") {
+      const sectionId = body.sectionId as string;
+      const studentIds = body.studentIds as number[] | undefined;
+
+      if (!sectionId || !Array.isArray(studentIds)) {
+        return NextResponse.json(
+          { ok: false, error: "sectionId and studentIds[] are required" },
+          { status: 400 },
+        );
+      }
+
+      const result = await bulkEnrollStudents({
+        organizationId: orgId,
+        sectionId,
+        studentIds,
       });
 
       return NextResponse.json({ ok: true, data: result });

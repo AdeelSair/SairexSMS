@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
 /**
  * Authenticated user shape extracted from the JWT session.
@@ -8,6 +9,7 @@ import { NextResponse } from "next/server";
 export type AuthUser = {
   id: number;
   email: string;
+  name: string | null;
   platformRole: string | null;
   role: string | null;
   organizationId: string | null;
@@ -51,9 +53,18 @@ export async function requireAuth(): Promise<AuthUser | NextResponse> {
 
   const orgStructure = (user.organizationStructure as string) ?? null;
 
+  const userId = parseInt(user.id as string, 10);
+  const email = user.email as string;
+  const name = typeof user.name === "string" ? user.name : null;
+
+  Sentry.setUser({ id: String(userId), email });
+  if (organizationId) Sentry.setTag("orgId", organizationId);
+  if (platformRole) Sentry.setTag("platformRole", platformRole);
+
   return {
-    id: parseInt(user.id as string, 10),
-    email: user.email as string,
+    id: userId,
+    email,
+    name,
     platformRole,
     role: (user.role as string) ?? null,
     organizationId,
@@ -81,6 +92,7 @@ export async function requireVerifiedAuth(): Promise<AuthUser | NextResponse> {
   return {
     id: parseInt(user.id as string, 10),
     email: user.email as string,
+    name: typeof user.name === "string" ? user.name : null,
     platformRole: (user.platformRole as string) ?? null,
     role: (user.role as string) ?? null,
     organizationId: user.organizationId ? String(user.organizationId) : null,

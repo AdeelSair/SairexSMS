@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { AttendanceStatus } from "@/lib/generated/prisma";
 import { assertYearOpen } from "./academic-year.service";
+import { emitActionUpdated } from "@/lib/events/action-events";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -101,6 +102,7 @@ export async function bulkMarkAttendance(input: BulkMarkInput) {
   }
 
   await assertYearOpen(academicYearId);
+  await assertDateWithinAcademicYear(organizationId, academicYearId, date);
 
   const section = await prisma.section.findUnique({
     where: { id: sectionId },
@@ -190,6 +192,11 @@ export async function bulkMarkAttendance(input: BulkMarkInput) {
     });
   }
 
+  emitActionUpdated({
+    orgId: organizationId,
+    type: "ABSENT_FOLLOWUP",
+  });
+
   return { created, updated, total: entries.length };
 }
 
@@ -206,13 +213,20 @@ export async function updateAttendance(input: UpdateAttendanceInput) {
 
   await assertYearOpen(record.academicYearId);
 
-  return prisma.attendance.update({
+  const updated = await prisma.attendance.update({
     where: { id: input.attendanceId },
     data: {
       status: input.status,
       remarks: input.remarks,
     },
   });
+
+  emitActionUpdated({
+    orgId: input.organizationId,
+    type: "ABSENT_FOLLOWUP",
+  });
+
+  return updated;
 }
 
 /* ── Get Section Attendance for Date ────────────────────── */
@@ -222,6 +236,17 @@ export async function getSectionAttendanceByDate(
   sectionId: string,
   date: Date,
 ): Promise<AttendanceRow[]> {
+  const section = await prisma.section.findUnique({
+    where: { id: sectionId },
+    select: { academicYearId: true, organizationId: true },
+  });
+
+  if (!section || section.organizationId !== scope.organizationId) {
+    throw new AttendanceError("Section not found");
+  }
+
+  await assertDateWithinAcademicYear(scope.organizationId, section.academicYearId, date);
+
   const normalizedDate = normalizeDate(date);
 
   const enrollments = await prisma.studentEnrollment.findMany({
@@ -576,6 +601,31 @@ export async function getAttendanceOverview(
 
 function normalizeDate(d: Date): Date {
   return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
+async function assertDateWithinAcademicYear(
+  organizationId: string,
+  academicYearId: string,
+  date: Date,
+) {
+  const academicYear = await prisma.academicYear.findUnique({
+    where: { id: academicYearId },
+    select: { organizationId: true, name: true, startDate: true, endDate: true },
+  });
+
+  if (!academicYear || academicYear.organizationId !== organizationId) {
+    throw new AttendanceError("Academic year not found");
+  }
+
+  const normalizedDate = normalizeDate(date);
+  const startDate = normalizeDate(academicYear.startDate);
+  const endDate = normalizeDate(academicYear.endDate);
+
+  if (normalizedDate < startDate || normalizedDate > endDate) {
+    throw new AttendanceError(
+      `Date must be within the academic year "${academicYear.name}" range`,
+    );
+  }
 }
 
 /* ── Custom Error ───────────────────────────────────────── */

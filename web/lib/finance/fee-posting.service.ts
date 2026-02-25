@@ -11,6 +11,7 @@ export interface PostingParams {
   year: number;
   userId: number;
   campusId?: number;
+  academicYearId?: string;
   dueDate?: Date;
 }
 
@@ -21,6 +22,21 @@ export interface PostingResult {
   totalAmount: number;
   status: "COMPLETED" | "FAILED";
   errorMessage?: string;
+}
+
+export interface PostingRunRow {
+  id: string;
+  month: number;
+  year: number;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  academicYearId: string | null;
+  campusId: number | null;
+  totalStudents: number;
+  totalChallans: number;
+  totalAmount: number;
+  startedAt: Date;
+  completedAt: Date | null;
+  errorMessage: string | null;
 }
 
 const BATCH_SIZE = 500;
@@ -45,6 +61,7 @@ export async function runMonthlyPosting(params: PostingParams): Promise<PostingR
     year,
     userId,
     campusId,
+    academicYearId,
     dueDate,
   } = params;
 
@@ -59,6 +76,7 @@ export async function runMonthlyPosting(params: PostingParams): Promise<PostingR
         month,
         year,
         campusId: campusId ?? null,
+        academicYearId: academicYearId ?? null,
         status: "PROCESSING",
         createdByUserId: userId,
       },
@@ -135,6 +153,46 @@ export async function runMonthlyPosting(params: PostingParams): Promise<PostingR
       errorMessage: message,
     };
   }
+}
+
+export async function listPostingRuns(
+  organizationId: string,
+  limit = 24,
+): Promise<PostingRunRow[]> {
+  const rows = await prisma.postingRun.findMany({
+    where: { organizationId },
+    orderBy: [{ year: "desc" }, { month: "desc" }, { startedAt: "desc" }],
+    take: Math.min(Math.max(limit, 1), 100),
+    select: {
+      id: true,
+      month: true,
+      year: true,
+      status: true,
+      academicYearId: true,
+      campusId: true,
+      totalStudents: true,
+      totalChallans: true,
+      totalAmount: true,
+      startedAt: true,
+      completedAt: true,
+      errorMessage: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    month: row.month,
+    year: row.year,
+    status: row.status,
+    academicYearId: row.academicYearId,
+    campusId: row.campusId,
+    totalStudents: row.totalStudents,
+    totalChallans: row.totalChallans,
+    totalAmount: Number(row.totalAmount),
+    startedAt: row.startedAt,
+    completedAt: row.completedAt,
+    errorMessage: row.errorMessage,
+  }));
 }
 
 /* ── Core Execution (chunked, transactional per batch) ──── */

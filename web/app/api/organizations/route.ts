@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, requireRole, isSuperAdmin } from "@/lib/auth-guard";
 import { generateOrganizationId } from "@/lib/id-generators";
 import { createOrganizationSchema } from "@/lib/validations";
+import { logger } from "@/lib/logger";
+import { TRIAL_POLICY, createTrialWindow } from "@/lib/billing/pricing-architecture";
 
 export async function GET() {
   const guard = await requireAuth();
@@ -19,6 +21,7 @@ export async function GET() {
     });
     return NextResponse.json(orgs);
   } catch (error) {
+    logger.error({ err: error, userId: guard.id, orgId: guard.organizationId }, "Failed to fetch organizations");
     return NextResponse.json(
       { error: "Failed to fetch orgs" },
       { status: 500 },
@@ -55,24 +58,43 @@ export async function POST(request: Request) {
     }
 
     const orgId = await generateOrganizationId();
+    const trialWindow = createTrialWindow();
 
-    const newOrg = await prisma.organization.create({
-      data: {
-        id: orgId,
-        createdByUserId: guard.id,
-        organizationName: parsed.data.organizationName,
-        displayName: parsed.data.displayName,
-        slug: parsed.data.slug,
-        organizationCategory: parsed.data.organizationCategory,
-        organizationStructure: parsed.data.organizationStructure,
-        status: parsed.data.status,
-        onboardingStep: "COMPLETED",
-      },
+    const newOrg = await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          id: orgId,
+          createdByUserId: guard.id,
+          organizationName: parsed.data.organizationName,
+          displayName: parsed.data.displayName,
+          slug: parsed.data.slug,
+          organizationCategory: parsed.data.organizationCategory,
+          organizationStructure: parsed.data.organizationStructure,
+          status: parsed.data.status,
+          onboardingStep: "COMPLETED",
+        },
+      });
+
+      await tx.organizationPlan.upsert({
+        where: { organizationId: org.id },
+        create: {
+          organizationId: org.id,
+          planType: "FREE",
+          active: true,
+          trialPlanType: TRIAL_POLICY.trialPlanType,
+          trialStartedAt: trialWindow.trialStartedAt,
+          trialEndsAt: trialWindow.trialEndsAt,
+        },
+        update: {},
+      });
+
+      return org;
     });
 
+    logger.info({ orgId: newOrg.id, slug: newOrg.slug, userId: guard.id }, "Organization created");
     return NextResponse.json(newOrg, { status: 201 });
   } catch (error) {
-    console.error("Failed to create org:", error);
+    logger.error({ err: error, userId: guard.id }, "Failed to create organization");
     return NextResponse.json(
       { error: "Failed to create organization" },
       { status: 500 },

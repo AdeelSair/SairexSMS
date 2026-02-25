@@ -13,6 +13,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import type { PlanType } from "@/lib/generated/prisma";
+import { TRIAL_POLICY, createTrialWindow } from "@/lib/billing/pricing-architecture";
 
 /* ── Feature Keys ─────────────────────────────────────── */
 
@@ -132,8 +133,11 @@ export function invalidateFeatureCache(): void {
 
 export async function getOrganizationPlan(organizationId: string): Promise<{
   planType: PlanType;
+  effectivePlanType: PlanType;
   active: boolean;
   expired: boolean;
+  trialActive: boolean;
+  trialEndsAt: Date | null;
   maxStudents: number | null;
   maxCampuses: number | null;
 }> {
@@ -142,21 +146,44 @@ export async function getOrganizationPlan(organizationId: string): Promise<{
   });
 
   if (!plan) {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { createdAt: true },
+    });
+    const { trialEndsAt } = createTrialWindow(org?.createdAt ?? new Date());
+    const trialActive = Boolean(org?.createdAt) && new Date() <= trialEndsAt;
+
     return {
       planType: "FREE",
+      effectivePlanType: trialActive ? TRIAL_POLICY.trialPlanType : "FREE",
       active: true,
       expired: false,
+      trialActive,
+      trialEndsAt: trialActive ? trialEndsAt : null,
       maxStudents: null,
       maxCampuses: null,
     };
   }
 
   const expired = plan.expiresAt ? new Date() > plan.expiresAt : false;
+  const trialEndsAt = plan.trialEndsAt ?? null;
+  const trialActive =
+    Boolean(trialEndsAt) &&
+    !expired &&
+    plan.active &&
+    new Date() <= trialEndsAt;
+  const effectivePlanType =
+    trialActive
+      ? plan.trialPlanType ?? TRIAL_POLICY.trialPlanType
+      : plan.planType;
 
   return {
     planType: plan.planType,
+    effectivePlanType,
     active: plan.active && !expired,
     expired,
+    trialActive,
+    trialEndsAt,
     maxStudents: plan.maxStudents,
     maxCampuses: plan.maxCampuses,
   };
@@ -173,14 +200,14 @@ export async function isFeatureEnabled(
   }
 
   const cache = await loadFeatureCache();
-  const cacheKey = `${orgPlan.planType}:${featureKey}`;
+  const cacheKey = `${orgPlan.effectivePlanType}:${featureKey}`;
   const cached = cache.get(cacheKey);
 
   if (cached !== undefined) {
     return cached;
   }
 
-  const defaults = PLAN_DEFAULTS[orgPlan.planType]?.[featureKey];
+  const defaults = PLAN_DEFAULTS[orgPlan.effectivePlanType]?.[featureKey];
   return defaults
     ? { enabled: defaults.enabled, limit: defaults.limit }
     : { enabled: false };
@@ -219,6 +246,9 @@ export async function setOrganizationPlan(
     maxStudents?: number;
     maxCampuses?: number;
     expiresAt?: Date;
+    trialPlanType?: PlanType | null;
+    trialStartedAt?: Date | null;
+    trialEndsAt?: Date | null;
   },
 ) {
   return prisma.organizationPlan.upsert({
@@ -229,6 +259,9 @@ export async function setOrganizationPlan(
       maxStudents: options?.maxStudents,
       maxCampuses: options?.maxCampuses,
       expiresAt: options?.expiresAt,
+      trialPlanType: options?.trialPlanType ?? undefined,
+      trialStartedAt: options?.trialStartedAt ?? undefined,
+      trialEndsAt: options?.trialEndsAt ?? undefined,
     },
     update: {
       planType,
@@ -236,6 +269,9 @@ export async function setOrganizationPlan(
       maxStudents: options?.maxStudents,
       maxCampuses: options?.maxCampuses,
       expiresAt: options?.expiresAt,
+      trialPlanType: options?.trialPlanType ?? undefined,
+      trialStartedAt: options?.trialStartedAt ?? undefined,
+      trialEndsAt: options?.trialEndsAt ?? undefined,
     },
   });
 }
