@@ -518,30 +518,36 @@ export default function FinancePage() {
 
       {/* ── Tab content ────────────────────────────────────── */}
       {activeTab === "HEADS" && (
-        <SxDataTable
-          columns={headColumns}
-          data={heads as unknown as Record<string, unknown>[]}
-          loading={loading}
-          emptyMessage="No fee categories found."
-        />
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <SxDataTable
+            columns={headColumns}
+            data={heads as unknown as Record<string, unknown>[]}
+            loading={loading}
+            emptyMessage="No fee categories found."
+          />
+        </div>
       )}
 
       {activeTab === "STRUCTURES" && (
-        <SxDataTable
-          columns={structureColumns}
-          data={structures as unknown as Record<string, unknown>[]}
-          loading={loading}
-          emptyMessage="No pricing rules found."
-        />
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <SxDataTable
+            columns={structureColumns}
+            data={structures as unknown as Record<string, unknown>[]}
+            loading={loading}
+            emptyMessage="No pricing rules found."
+          />
+        </div>
       )}
 
       {activeTab === "CHALLANS" && (
-        <SxDataTable
-          columns={challanColumns}
-          data={challans as unknown as Record<string, unknown>[]}
-          loading={loading}
-          emptyMessage="No generated bills found."
-        />
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <SxDataTable
+            columns={challanColumns}
+            data={challans as unknown as Record<string, unknown>[]}
+            loading={loading}
+            emptyMessage="No generated bills found."
+          />
+        </div>
       )}
 
       {/* ═══════════ CREATE DIALOG ═══════════ */}
@@ -661,8 +667,8 @@ export default function FinancePage() {
                 className="space-y-4"
               >
                 {/* Target location */}
-                <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="space-y-3 rounded-xl border border-border bg-surface p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">
                     Target Location
                   </p>
                   <FormField
@@ -1029,20 +1035,20 @@ export default function FinancePage() {
           </DialogHeader>
 
           {selectedChallan && (
-            <div className="space-y-1 rounded-lg border bg-muted/30 p-4">
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-1 rounded-xl border border-border bg-surface p-4">
+              <p className="text-sm text-muted">
                 Student:{" "}
                 <span className="font-medium text-foreground">
                   {selectedChallan.student?.fullName}
                 </span>
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted">
                 Challan:{" "}
                 <span className="font-data text-foreground">
                   {selectedChallan.challanNo}
                 </span>
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted">
                 Amount:{" "}
                 <span className="text-lg font-bold text-success">
                   <SxAmount value={Number(selectedChallan.totalAmount)} />

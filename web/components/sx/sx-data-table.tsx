@@ -50,23 +50,24 @@ export function SxDataTable<T extends Record<string, unknown>>({
   className,
 }: SxDataTableProps<T>) {
   const getKey = rowKey ?? ((row: T, i: number) => (row.id as string | number) ?? i);
+  const seenRowKeys = new Set<string>();
 
   return (
     <div
       className={cn(
-        "overflow-auto rounded-lg border bg-card",
+        "overflow-auto rounded-xl border border-border bg-surface",
         className,
       )}
     >
       <Table>
         {/* ── Sticky header ────────────────────────────────── */}
-        <TableHeader className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
+        <TableHeader className="sticky top-0 z-10 bg-surface backdrop-blur-sm">
           <TableRow className="hover:bg-transparent">
             {columns.map((col) => (
               <TableHead
                 key={col.key}
                 className={cn(
-                  "h-9 whitespace-nowrap px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
+                  "h-9 whitespace-nowrap px-3 text-xs font-semibold uppercase tracking-wider text-muted",
                   col.numeric && "text-right",
                   col.width,
                 )}
@@ -95,7 +96,7 @@ export function SxDataTable<T extends Record<string, unknown>>({
             <TableRow>
               <TableCell
                 colSpan={columns.length}
-                className="h-32 text-center text-muted-foreground"
+                className="h-32 text-center text-muted"
               >
                 {emptyMessage}
               </TableCell>
@@ -106,7 +107,16 @@ export function SxDataTable<T extends Record<string, unknown>>({
           {!loading &&
             data.map((row, i) => (
               <TableRow
-                key={getKey(row, i)}
+                key={(() => {
+                  const baseKey = String(getKey(row, i));
+                  if (!seenRowKeys.has(baseKey)) {
+                    seenRowKeys.add(baseKey);
+                    return baseKey;
+                  }
+                  const fallbackKey = `${baseKey}__dup_${i}`;
+                  seenRowKeys.add(fallbackKey);
+                  return fallbackKey;
+                })()}
                 onClick={onRowClick ? () => onRowClick(row, i) : undefined}
                 className={cn(
                   "transition-colors",

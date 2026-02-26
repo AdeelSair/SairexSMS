@@ -109,8 +109,20 @@ const challanColumns: SxColumn<OutstandingChallan>[] = [
     key: "status",
     header: "Status",
     render: (row) => (
-      <SxStatusBadge variant={row.status === "UNPAID" ? "warning" : "info"}>
-        {row.status}
+      <SxStatusBadge
+        variant={
+          new Date(row.dueDate) < new Date()
+            ? "destructive"
+            : row.status === "UNPAID"
+              ? "warning"
+              : "info"
+        }
+      >
+        {new Date(row.dueDate) < new Date()
+          ? "OVERDUE"
+          : row.status === "UNPAID"
+            ? "PENDING"
+            : "PARTIAL"}
       </SxStatusBadge>
     ),
   },
@@ -283,13 +295,13 @@ export default function PaymentsPage() {
         subtitle="Record payment and reconcile challans with ledger-safe flow"
       />
 
-      <div className="rounded-lg border bg-card p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
           Student Selector
         </p>
         <div className="grid gap-3 md:grid-cols-[1fr_320px]">
           <div className="relative">
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -314,22 +326,28 @@ export default function PaymentsPage() {
 
       {summary && (
         <div className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Student</p>
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-sm text-muted">Student</p>
             <p className="mt-1 text-sm font-medium">{summary.fullName}</p>
-            <p className="text-xs text-muted-foreground">{summary.admissionNo}</p>
+            <p className="text-xs text-muted">{summary.admissionNo}</p>
           </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Total Debit</p>
-            <p className="mt-1 text-sm font-semibold"><SxAmount value={summary.totalDebit} /></p>
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-sm text-muted">Total Debit</p>
+            <p className="mt-1 text-xl font-semibold"><SxAmount value={summary.totalDebit} /></p>
           </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Total Credit</p>
-            <p className="mt-1 text-sm font-semibold"><SxAmount value={summary.totalCredit} /></p>
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-sm text-muted">Total Credit</p>
+            <p className="mt-1 text-xl font-semibold"><SxAmount value={summary.totalCredit} /></p>
           </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Current Balance</p>
-            <p className="mt-1 text-sm font-semibold"><SxAmount value={summary.balance} /></p>
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-sm text-muted">Current Balance</p>
+            <p
+              className={`mt-1 text-2xl font-bold ${
+                summary.balance > 0 ? "text-[var(--sx-danger)]" : "text-[var(--sx-success)]"
+              }`}
+            >
+              <SxAmount value={summary.balance} />
+            </p>
           </div>
         </div>
       )}
@@ -342,8 +360,8 @@ export default function PaymentsPage() {
       />
 
       {selectedStudentId && (
-        <div className="rounded-lg border bg-card p-4">
-          <p className="mb-4 text-sm font-semibold">Record Payment</p>
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <p className="mb-4 text-sm font-semibold text-muted">Record Payment</p>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(submitPayment)} className="space-y-6">
               <SxFormSection columns={2}>
@@ -389,7 +407,7 @@ export default function PaymentsPage() {
                         <Input type="number" step="0.01" placeholder="0.00" {...field} />
                       </FormControl>
                       {selectedChallan && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted">
                           Remaining balance: {selectedChallan.balance.toFixed(2)}
                         </p>
                       )}
@@ -471,6 +489,7 @@ export default function PaymentsPage() {
                 <SxButton
                   type="submit"
                   sxVariant="primary"
+                  className="h-11 text-base font-medium"
                   loading={form.formState.isSubmitting}
                 >
                   Record Payment

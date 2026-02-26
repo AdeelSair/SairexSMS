@@ -6,18 +6,14 @@
  */
 
 export interface OrganizationTheme {
-  /** Primary brand color (CSS color value) */
-  primary?: string;
-  /** Primary foreground (text on primary) */
+  /** Tenant primary brand color (hex/css) */
+  primaryColor?: string;
+  /** Tenant accent color (hex/css) */
+  accentColor?: string;
+  /** Tenant primary foreground (future accessibility support) */
   primaryForeground?: string;
-  /** Sidebar background */
-  sidebar?: string;
-  /** Sidebar foreground */
-  sidebarForeground?: string;
   /** Logo URL override */
   logoUrl?: string;
-  /** Border radius override */
-  radius?: string;
 }
 
 /**
@@ -35,20 +31,18 @@ export function setCSSVariablesFromDB(theme: OrganizationTheme): void {
 
   const root = document.documentElement;
 
-  const mappings: [keyof OrganizationTheme, string][] = [
-    ["primary", "--primary"],
-    ["primaryForeground", "--primary-foreground"],
-    ["sidebar", "--sidebar"],
-    ["sidebarForeground", "--sidebar-foreground"],
-    ["radius", "--radius"],
-  ];
-
-  for (const [key, cssVar] of mappings) {
-    const value = theme[key];
-    if (value) {
-      root.style.setProperty(cssVar, value);
-    }
-  }
+  root.style.setProperty(
+    "--tenant-primary",
+    theme.primaryColor || "var(--sx-primary)",
+  );
+  root.style.setProperty(
+    "--tenant-accent",
+    theme.accentColor || "var(--sx-accent)",
+  );
+  root.style.setProperty(
+    "--tenant-primary-foreground",
+    theme.primaryForeground || "var(--sx-primary-foreground)",
+  );
 }
 
 /**
@@ -58,13 +52,7 @@ export function resetThemeOverrides(): void {
   if (typeof document === "undefined") return;
 
   const root = document.documentElement;
-  const vars = [
-    "--primary",
-    "--primary-foreground",
-    "--sidebar",
-    "--sidebar-foreground",
-    "--radius",
-  ];
+  const vars = ["--tenant-primary", "--tenant-accent", "--tenant-primary-foreground"];
 
   for (const v of vars) {
     root.style.removeProperty(v);

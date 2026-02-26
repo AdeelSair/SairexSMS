@@ -37,6 +37,7 @@
 28. [Coding Standards (Enforced Rules)](#28-coding-standards-enforced-rules)
 29. [Phase 8 Completion + Phase 9 Revenue Optimization (Step 1)](#29-phase-8-completion--phase-9-revenue-optimization-step-1)
 30. [Production Release & Rollback Runbook](#30-production-release--rollback-runbook)
+31. [Step 9 Controlled Theme Migration Plan](#31-step-9-controlled-theme-migration-plan)
 
 ---
 
@@ -1560,6 +1561,21 @@ Use this mapping to avoid naming drift between internal entitlement logic and pu
 | PRO | PROFESSIONAL | Predictive and advanced operations tier |
 | ENTERPRISE | ENTERPRISE | Chain and custom-commercial tier |
 
+### Temporary Theme Migration Utility (Remove After Migration)
+
+To accelerate token migration audits, a temporary CSS utility is available in `web/app/globals.css`:
+
+- `.debug-tokens * { outline: 1px solid red; }`
+
+Usage:
+
+- Wrap a page/section with `<div className="debug-tokens">...</div>` to quickly identify unreviewed styles.
+
+Removal policy:
+
+- This utility is **temporary** and must be removed once component token migration is complete.
+- Do not keep `debug-tokens` wrappers in production-facing pages after signoff.
+
 ### APIs Exposing Revenue Optimization Data
 
 - `GET /api/billing/plan-usage` — plan, usage/limits, PKR student pricing range, trial state, and upgrade recommendation
@@ -1649,6 +1665,294 @@ Store this in release notes or deployment ticket:
 - Smoke test results:
 - Sentry error delta (before/after):
 - Final decision: GO / ROLLBACK
+
+---
+
+## 31. Step 9 Controlled Theme Migration Plan
+
+Objective:
+
+- Eliminate hardcoded colors gradually and standardize on:
+  - `bg-surface`
+  - `bg-primary`
+  - `text-muted`
+  - `border-border`
+
+### Migration Waves
+
+| Wave | Scope | Risk | Impact |
+|------|-------|------|--------|
+| 1 | UI primitives (`components/ui/*`) | Low | System-wide |
+| 2 | Layout shells (`app/*/layout.tsx`, sidebars, headers) | Low | Identity |
+| 3 | Dashboards (Daily Ops, Finance, Attendance, Admin overview) | Medium | Product feel |
+| 4 | Forms & tables | High | Final polish |
+
+### Safety Tooling (Temporary)
+
+- `web/app/globals.css` includes:
+  - `.debug-tokens * { outline: 1px solid red; }`
+  - `.token-debug [class*="bg-white"] { outline: 2px solid red; }`
+
+Usage:
+
+- Wrap target page/section:
+  - `<div className="debug-tokens">...`
+  - or `<div className="token-debug">...`
+
+Removal:
+
+- Remove debug wrappers after migration validation.
+- Keep helper classes only while migration is active.
+
+### Execution Method
+
+- No bulk mass-replace.
+- Folder-by-folder cycle:
+  1. Migrate
+  2. Run app
+  3. Visual verify
+  4. Commit
+
+Suggested commit style:
+
+- `theme: migrate ui primitives to surface tokens`
+- `theme: migrate admin shell to tokenized surfaces`
+
+### Definition of Done
+
+- No `bg-white` in shared components.
+- No `text-gray-*` in shared components.
+- Main dashboards use tokenized surfaces.
+- Hardcoded blue action backgrounds removed from target screens.
+
+Allowed temporary exceptions:
+
+- charts
+- status badges
+- legacy screens
+
+### Progress Tracker
+
+- ✅ Wave 1 — UI primitives
+- ✅ Wave 2 — Layout shells
+- ✅ Wave 3 — Dashboards & ERP
+- ✅ Wave 4 — Forms & tables
+
+Wave 1 note:
+
+- Repo scan confirms no `bg-white`, `text-gray-*`, `border-gray-*`, or `bg-blue-*` usage in `web/components/ui/*`.
+
+Wave 2 note:
+
+- Repo scan confirms no `bg-white`, `text-gray-*`, `border-gray-*`, or `bg-gray-*` usage in layout shells (`web/app/**/layout.tsx`, `web/components/layout/*`).
+- Root shell enforces `min-h-screen bg-background text-foreground` at `web/app/layout.tsx`.
+- Admin shell follows locked sidebar -> background main content layering in `web/app/admin/layout.tsx`.
+
+### Wave 3 Priority and Rules
+
+Migration order:
+
+1. Daily Operations Dashboard
+2. Fee Collection screen
+3. Attendance screen
+4. Admin overview dashboard
+5. Mobile Action dashboard container level
+
+Structural standard:
+
+- Page container uses `bg-background` with spacing only.
+- Cards use `bg-surface border-border rounded-xl`.
+- Primary CTAs use `bg-primary text-white hover:opacity-90`.
+- Labels use `text-muted`.
+- ERP meaning colors stay system-locked (`--sx-success`, `--sx-warning`, `--sx-danger`, `--sx-info`).
+
+Wave 3 progress note:
+
+- Daily Operations Dashboard migrated to surface/token structure and primary-driven quick actions.
+- Collect Fee workspace (`web/app/admin/payments/page.tsx`) migrated to surface panels, primary CTA hierarchy, and semantic financial state colors.
+- Attendance workspace (`web/app/admin/attendance/page.tsx`) migrated to surface toolbars, semantic status toggles (present/absent/leave), muted row scanning, and tenant-primary save action.
+- Admin overview dashboard (`web/app/admin/dashboard/page.tsx`) migrated to background/surface control-center layout, semantic trend indicators (growth/decline/neutral), and analytics-safe KPI hierarchy.
+- Mobile Action dashboard container (`web/app/mobile/dashboard/page.tsx`) migrated to `bg-background` frame + `bg-surface border-border` top header/card surfaces while preserving existing functional action-tile colors.
+
+### Wave 4 Execution (Forms & Tables)
+
+Objective:
+
+- Standardize form/table surface, border, and text hierarchy using tokens while preserving accessibility-critical interaction colors (focus/error/success states).
+
+Execution order:
+
+1. Shared form primitives (`input`, `select`, `textarea`, `form`).
+2. Form section containers.
+3. Label/helper text hierarchy.
+4. Table structure and safe hover behavior.
+
+Wave 4 kickoff note:
+
+- Shared form primitives updated: `web/components/ui/input.tsx`, `web/components/ui/select.tsx`, `web/components/ui/textarea.tsx`, `web/components/ui/form.tsx`.
+- Table structure baseline updated: `web/components/sx/sx-data-table.tsx`, `web/components/ui/table.tsx`.
+- Focus, ring, and validation error colors intentionally unchanged for accessibility safety.
+
+Wave 4 production audit:
+
+- Shared-layer leverage order executed correctly (`primitives -> shared data table -> feature pages`) to minimize regression risk in live SaaS workflows.
+- Input/select/textarea migration to `bg-surface` removes legacy white flashes and improves dark mode continuity.
+- Placeholder hierarchy (`text-muted`) and form hierarchy (`label: text-sm font-medium`, `helper: text-muted text-xs`) now align with ERP data-entry UX.
+- Shared table surface + `hover:bg-muted/40` establishes a consistent cross-theme grid interaction baseline.
+
+Wave 4 next-pass strike plan (feature pass pending):
+
+1. Fee module form containers (`fee setup`, concessions, transport fee, fine rules).
+2. Student admission/onboarding form containers.
+3. Remaining admin forms (`staff`, `class`, `subject`, related setup pages).
+4. Page-level table wrappers on admin screens.
+
+Feature-pass replacement patterns:
+
+- Form section container: `bg-white ... rounded-lg` -> `bg-surface border border-border rounded-xl`.
+- Page-level table wrapper: wrap table blocks in `bg-surface border border-border rounded-xl p-4`.
+
+Do-not-touch guardrails for this pass:
+
+- Charts and chart containers handled in Wave 3.
+- Mobile action tile color logic (functional UX color system).
+- Inline editable tables requiring separate interaction review.
+
+Wave 4 final definition of done:
+
+- No `bg-white` in form pages.
+- All form sections use surface/border token wrappers.
+- Page-level table wrappers are surface-based.
+- Interaction colors (focus/error/success validation) remain unchanged.
+- Validation visuals remain fully readable in light/dark mode.
+
+Updated status:
+
+- ✅ Wave 1 — UI primitives
+- ✅ Wave 2 — App shells
+- ✅ Wave 3 — Dashboards & ERP
+- ✅ Wave 4 — Forms & tables (shared layer + feature pass complete)
+
+### Wave 4 Final Execution Plan (Operational)
+
+Objective (feature pages only):
+
+- Eliminate remaining layout-level `bg-white`, `border-gray-*`, and `text-gray-*` usage in feature-page containers.
+- Keep controls untouched; only migrate form section wrappers and page-level table wrappers.
+
+Global search patterns:
+
+- Find form containers: `bg-white p-6`, `bg-white p-4`, `bg-white rounded-lg`, `bg-white shadow-sm`.
+- Replace with `bg-surface border border-border rounded-xl p-6` (or `bg-surface border border-border rounded-xl` where padding already exists).
+- For table wrappers, wrap `DataTable`/table blocks inside `bg-surface border border-border rounded-xl p-4`.
+
+Migration order (feature pass):
+
+1. Financial admin screens (fee structure, concessions, fine rules, transport setup).
+2. Admission/student management forms.
+3. Academic configuration forms (classes, subjects, sections, timetable configs).
+4. Remaining admin table pages (`filters -> table -> pagination` pattern).
+
+Guardrails (locked):
+
+- Do not modify charts/chart theming in this pass.
+- Do not modify mobile action tile color system.
+- Do not modify inline editable table interactions.
+- Do not modify focus, error, or validation interaction colors.
+
+Fast per-screen QA:
+
+- Light mode: no white slabs; sections should match Daily Ops layering.
+- Dark mode: no glowing white blocks; surfaces and borders remain consistent.
+
+Production acceptance for Wave 4 complete:
+
+- No `bg-white` in feature-page layout containers.
+- All form sections wrapped in surface cards.
+- All page-level tables wrapped in surface cards.
+- No interaction/validation color regressions.
+- No chart or mobile functional color regressions.
+- Dark mode visual structure matches the Wave 3 dashboard baseline.
+
+Commit discipline:
+
+- `theme(forms): wrap fee module form sections in surface containers`
+- `theme(tables): wrap student admin tables in surface containers`
+- Keep commits scoped by feature group for rollback safety and auditability.
+
+Wave 4 feature-pass progress:
+
+- ✅ Pass 1 (financial admin screens) completed for:
+  - `web/app/admin/finance/page.tsx`
+  - `web/app/admin/finance/dashboard/page.tsx`
+  - `web/app/admin/finance/posting/page.tsx`
+- ✅ Pass 2 (admission/student management) completed for:
+  - `web/app/admin/students/page.tsx`
+  - `web/app/admin/enrollments/page.tsx`
+- ✅ Pass 3 (academic configuration screens) completed for:
+  - `web/app/admin/classes/page.tsx`
+  - `web/app/admin/academic-years/page.tsx`
+- ✅ Pass 4 (remaining admin table pages) completed for:
+  - `web/app/admin/users/page.tsx`
+  - `web/app/admin/campuses/page.tsx`
+  - `web/app/admin/regions/page.tsx`
+  - `web/app/admin/analytics/access-coverage/page.tsx`
+  - `web/app/admin/jobs/page.tsx`
+- Applied surface wrappers to form sections and page-level table blocks (`bg-surface border border-border rounded-xl`).
+- Kept interaction/focus/validation colors unchanged.
+- `web/app/admin/finance/challans/[id]/print/page.tsx` intentionally excluded in this pass because print output requires print-optimized white paper styling.
+
+### 32. Theming Phase Complete + Governance Lock Roadmap
+
+Theming phase status:
+
+- ✅ Wave 1 — UI primitives
+- ✅ Wave 2 — App shells
+- ✅ Wave 3 — Dashboards & ERP
+- ✅ Wave 4 — Forms & tables
+
+Platform-level outcome:
+
+- Token-governed layout and shared primitives (no hardcoded layout color usage in active admin/product surfaces).
+- Runtime tenant theming with brand hierarchy (`Sairex shell -> tenant action identity -> system semantic meaning`).
+- Dark-mode-safe structures across dashboard, ERP, forms, and tables.
+- Operational UX improvements in core flows (attendance scanability, fee/payment clarity, dense-form readability).
+
+### Theme Governance Lock (next phase)
+
+Step 1 — ESLint token enforcement:
+
+- Add guardrails to block hardcoded utility colors in UI layer (e.g. `bg-white`, `text-gray-*`, `border-gray-*`, `bg-blue-*`).
+- Use lint failures as a hard stop for regressions.
+
+Step 2 — Pull request checklist:
+
+- Add `.github/pull_request_template.md` with token compliance checks:
+  - no hardcoded Tailwind colors
+  - surface/background token correctness
+  - semantic status color correctness
+  - tenant primary used only for action affordances
+
+Step 3 — Blueprint development law:
+
+- Add and enforce a permanent UI rule:
+  - never use direct layout color utilities
+  - use only `bg-surface`, `bg-background`, `text-muted`, `border-border`
+  - use `bg-primary` for actions only
+  - use `sx-*` semantic tokens for system status meaning
+
+Step 4 — Monetize tenant branding:
+
+- Convert branding capability into plan-gated features:
+  - Starter: default/system branding
+  - Professional: school logo + tenant primary actions
+  - Enterprise: full branding suite (custom auth theme, domain mapping, mobile color sync)
+
+Next delivery options:
+
+- A — Implement Theme Governance Lock files (ESLint policy + PR template + blueprint enforcement section).
+- B — Wire plan-based tenant branding permissions (backend guard + UI capability switch).
+- C — Implement chart theme token system (dark mode + safe tenant accent mapping).
 
 ---
 

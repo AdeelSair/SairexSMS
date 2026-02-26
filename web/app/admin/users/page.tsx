@@ -372,8 +372,8 @@ export default function UsersPage() {
 
       {/* ── Filter bar ─────────────────────────────────────── */}
       {campuses.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
-          <span className="text-sm font-medium text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-3">
+          <span className="text-sm font-medium text-muted">
             Filter:
           </span>
 
@@ -410,33 +410,40 @@ export default function UsersPage() {
 
       {/* ── Users table ────────────────────────────────────── */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
+        <h3 className="mb-2 text-sm font-semibold text-muted">
           Users ({filteredUsers.length}
           {hasFilters && ` of ${users.length}`})
         </h3>
-        <SxDataTable
-          columns={userColumns}
-          data={filteredUsers as unknown as Record<string, unknown>[]}
-          loading={loading}
-          emptyMessage={
-            hasFilters
-              ? "No users match the selected filters"
-              : "No users found"
-          }
-        />
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <SxDataTable
+            columns={userColumns}
+            data={filteredUsers as unknown as Record<string, unknown>[]}
+            rowKey={(row, index) =>
+              `${row.id}-${row.email}-${row.organization?.id ?? "org"}-${row.campusId ?? "campus"}-${index}`
+            }
+            loading={loading}
+            emptyMessage={
+              hasFilters
+                ? "No users match the selected filters"
+                : "No users found"
+            }
+          />
+        </div>
       </div>
 
       {/* ── Pending invites table ──────────────────────────── */}
       {invites.length > 0 && (
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
+          <h3 className="mb-2 text-sm font-semibold text-muted">
             Pending Invites ({invites.length})
           </h3>
-          <SxDataTable
-            columns={inviteColumns}
-            data={invites as unknown as Record<string, unknown>[]}
-            emptyMessage="No pending invites"
-          />
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <SxDataTable
+              columns={inviteColumns}
+              data={invites as unknown as Record<string, unknown>[]}
+              emptyMessage="No pending invites"
+            />
+          </div>
         </div>
       )}
 

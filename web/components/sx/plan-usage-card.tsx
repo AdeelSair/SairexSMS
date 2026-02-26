@@ -12,7 +12,7 @@ export function PlanUsageCard() {
 
   if (loading || !usage) {
     return (
-      <div className="rounded-lg border bg-card p-4">
+      <div className="rounded-xl border border-border bg-surface p-4">
         <div className="h-5 w-40 animate-pulse rounded bg-muted" />
         <div className="mt-4 space-y-3">
           <div className="h-4 animate-pulse rounded bg-muted" />
@@ -26,14 +26,14 @@ export function PlanUsageCard() {
   const studentLimitReached = usage.usage.students >= usage.limits.students;
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             Current Plan
           </p>
           <p className="text-lg font-semibold">{usage.plan}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted">
             Rs {usage.pricing.monthlyPerStudentPkr.min}
             {usage.pricing.monthlyPerStudentPkr.max > usage.pricing.monthlyPerStudentPkr.min
               ? `-${usage.pricing.monthlyPerStudentPkr.max}`

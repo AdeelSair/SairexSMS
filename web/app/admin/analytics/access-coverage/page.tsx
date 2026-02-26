@@ -254,9 +254,9 @@ export default function AccessCoveragePage() {
       />
 
       {/* ── Controls ──────────────────────────────────────── */}
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface p-4">
         <div className="w-56 space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label className="text-xs font-medium text-muted">
             Group by
           </label>
           <Select
@@ -277,7 +277,7 @@ export default function AccessCoveragePage() {
         </div>
 
         <div className="w-48 space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label className="text-xs font-medium text-muted">
             Scope filter
           </label>
           <Input
@@ -375,13 +375,15 @@ export default function AccessCoveragePage() {
         )}
 
       {/* ── Data table ────────────────────────────────────── */}
-      <SxDataTable
-        columns={columns}
-        data={rows as (CoverageRow & Record<string, unknown>)[]}
-        loading={loading}
-        rowKey={(row) => row.unitPath || "__org__"}
-        emptyMessage="No coverage data available for the selected scope"
-      />
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <SxDataTable
+          columns={columns}
+          data={rows as (CoverageRow & Record<string, unknown>)[]}
+          loading={loading}
+          rowKey={(row) => row.unitPath || "__org__"}
+          emptyMessage="No coverage data available for the selected scope"
+        />
+      </div>
     </div>
   );
 }
@@ -402,8 +404,8 @@ function SummaryCard({
   isCurrency?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <div className="flex items-center gap-2 text-muted">
         {icon}
         <span className="text-xs font-medium uppercase tracking-wider">
           {label}

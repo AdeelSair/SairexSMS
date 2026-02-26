@@ -13,8 +13,10 @@ import { cn } from "@/lib/utils";
  */
 
 interface SxAmountProps {
-  /** Numeric amount */
-  amount: number;
+  /** Numeric amount (preferred prop) */
+  amount?: number | string | null;
+  /** Backward-compatible alias used by some screens */
+  value?: number | string | null;
   /** Currency prefix — defaults to "Rs." */
   currency?: string;
   /** Number of decimal places — defaults to 0 */
@@ -29,13 +31,21 @@ interface SxAmountProps {
 
 export function SxAmount({
   amount,
+  value,
   currency = "Rs.",
   decimals = 0,
   locale = "en-PK",
   colorNegative = true,
   className,
 }: SxAmountProps) {
-  const formatted = amount.toLocaleString(locale, {
+  const resolvedAmount = amount ?? value;
+  const numericAmount =
+    typeof resolvedAmount === "number"
+      ? resolvedAmount
+      : Number(resolvedAmount);
+  const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+
+  const formatted = safeAmount.toLocaleString(locale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
@@ -44,7 +54,7 @@ export function SxAmount({
     <span
       className={cn(
         "inline-block text-right font-data",
-        colorNegative && amount < 0 && "text-destructive",
+        colorNegative && safeAmount < 0 && "text-destructive",
         className,
       )}
     >

@@ -410,24 +410,25 @@ export default function ClassesPage() {
 
       {/* ── Class → Section Table ──────────────────────────── */}
       {activeYear && (
-        <div className="overflow-auto rounded-lg border bg-card">
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <div className="overflow-auto rounded-xl border border-border bg-surface">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-9 w-10 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground" />
-                <TableHead className="h-9 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <TableHead className="h-9 w-10 px-3 text-xs font-semibold uppercase tracking-wider text-muted" />
+                <TableHead className="h-9 px-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Name
                 </TableHead>
-                <TableHead className="h-9 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <TableHead className="h-9 px-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Code
                 </TableHead>
-                <TableHead className="h-9 px-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <TableHead className="h-9 px-3 text-right text-xs font-semibold uppercase tracking-wider text-muted">
                   Sections
                 </TableHead>
-                <TableHead className="h-9 px-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <TableHead className="h-9 px-3 text-right text-xs font-semibold uppercase tracking-wider text-muted">
                   Enrollments
                 </TableHead>
-                <TableHead className="h-9 w-12 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground" />
+                <TableHead className="h-9 w-12 px-3 text-xs font-semibold uppercase tracking-wider text-muted" />
               </TableRow>
             </TableHeader>
 
@@ -447,7 +448,7 @@ export default function ClassesPage() {
                 <TableRow>
                   <TableCell
                     colSpan={6}
-                    className="h-32 text-center text-muted-foreground"
+                    className="h-32 text-center text-muted"
                   >
                     No classes found. Create one to get started.
                   </TableCell>
@@ -471,6 +472,7 @@ export default function ClassesPage() {
                 })}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 

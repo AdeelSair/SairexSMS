@@ -1,7 +1,10 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import { navigation } from "@/lib/config/theme";
 import { isSimpleMode, resolveOrganizationMode } from "@/lib/system/mode.service";
+import { prisma } from "@/lib/prisma";
+import { SystemSidebar } from "@/components/layout/system-sidebar";
 import { SidebarNav } from "./SidebarNav";
 import LogoutButton from "./LogoutButton";
 import { MobileSidebar } from "./MobileSidebar";
@@ -50,6 +53,13 @@ export default async function AdminLayout({
   const orgMode = user.organizationId
     ? await resolveOrganizationMode(user.organizationId)
     : { mode: "PRO" as const, isSimple: false };
+  const organizationBranding = user.organizationId
+    ? await prisma.organization.findUnique({
+        where: { id: user.organizationId },
+        select: { logoUrl: true },
+      })
+    : null;
+  const tenantLogoUrl = organizationBranding?.logoUrl || "/sairex-logo.svg";
   const simpleMode = isSimpleMode(orgMode.mode);
   const filteredNavigation = simpleMode
     ? navigation
@@ -64,10 +74,19 @@ export default async function AdminLayout({
     <div className="flex h-screen flex-col md:flex-row">
       {/* ── Mobile top bar ──────────────────────────────────── */}
       <header className="flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 py-3 md:hidden">
-        <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">
-          <span>SAIREX</span>{" "}
-          <span className="text-sidebar-primary">SMS</span>
-        </h1>
+        <div className="flex items-center gap-2">
+          <Image
+            src={tenantLogoUrl}
+            alt="Tenant logo"
+            width={24}
+            height={24}
+            className="rounded-sm bg-background/90 p-0.5"
+          />
+          <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">
+            <span>SAIREX</span>{" "}
+            <span className="text-sidebar-primary">SMS</span>
+          </h1>
+        </div>
         <MobileSidebar
           groups={filteredNavigation}
           footerGroups={FOOTER_NAV_GROUPS}
@@ -77,13 +96,22 @@ export default async function AdminLayout({
       </header>
 
       {/* ── Desktop sidebar ─────────────────────────────────── */}
-      <aside className="hidden w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+      <SystemSidebar className="hidden w-64 flex-col border-r border-sidebar-border md:flex">
         {/* Brand */}
         <div className="border-b border-sidebar-border px-6 py-5">
-          <h1 className="text-xl font-bold tracking-tight">
-            <span className="text-sidebar-foreground">SAIREX</span>{" "}
-            <span className="text-sidebar-primary">SMS</span>
-          </h1>
+          <div className="mb-2 flex items-center gap-2">
+            <Image
+              src={tenantLogoUrl}
+              alt="Tenant logo"
+              width={28}
+              height={28}
+              className="rounded-sm bg-background/90 p-0.5"
+            />
+            <h1 className="text-xl font-bold tracking-tight">
+              <span className="text-sidebar-foreground">SAIREX</span>{" "}
+              <span className="text-sidebar-primary">SMS</span>
+            </h1>
+          </div>
           <p className="mt-0.5 text-xs text-sidebar-foreground/50">
             {userRole} Console
           </p>
@@ -110,8 +138,11 @@ export default async function AdminLayout({
           <div className="px-1 pt-2">
             <ThemeToggle />
           </div>
+          <p className="px-2 py-2 text-center text-xs text-sidebar-foreground/60">
+            Powered by <span className="font-semibold">Sairex Technologies</span>
+          </p>
         </div>
-      </aside>
+      </SystemSidebar>
 
       {/* ── Main content area ───────────────────────────────── */}
       <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">

@@ -41,13 +41,13 @@ export function QuickActionsPanel({ role }: QuickActionsPanelProps) {
   const roleActions = ACTIONS[normalizedRole] ?? [];
 
   return (
-    <div className="space-y-3 rounded-lg border bg-card p-4">
-      <h2 className="text-sm font-semibold text-muted-foreground">
+    <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
+      <h2 className="text-sm font-semibold text-muted">
         Quick Actions
       </h2>
 
       {roleActions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No quick actions available for this role.</p>
+        <p className="text-sm text-muted">No quick actions available for this role.</p>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {roleActions.map((action) => (

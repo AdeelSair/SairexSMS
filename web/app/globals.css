@@ -4,6 +4,47 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@layer base {
+  :root {
+    /* ========== SAIREX CORE ========== */
+    --sx-primary: #1d4e89;
+    --sx-primary-foreground: #ffffff;
+    --sx-accent: #39b54a;
+    --sx-secondary: #1fa2a6;
+
+    /* ========== SURFACES ========== */
+    --sx-bg: #f8fafc;
+    --sx-surface: #ffffff;
+
+    /* ========== TEXT ========== */
+    --sx-text: #0b1320;
+    --sx-text-muted: #6b7280;
+
+    /* ========== UI ========== */
+    --sx-border: #e5e7eb;
+    --sx-ring: #1d4e89;
+
+    /* ========== SYSTEM (LOCKED) ========== */
+    --sx-success: #22c55e;
+    --sx-warning: #f59e0b;
+    --sx-danger: #ef4444;
+    --sx-info: #3b82f6;
+
+    /* ========== TENANT RUNTIME ========== */
+    --tenant-primary: var(--sx-primary);
+    --tenant-accent: var(--sx-accent);
+    --tenant-primary-foreground: var(--sx-primary-foreground);
+  }
+
+  .dark {
+    --sx-bg: #0b1320;
+    --sx-surface: #111827;
+    --sx-text: #f9fafb;
+    --sx-text-muted: #9ca3af;
+    --sx-border: #1f2937;
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════
    SAIREX DESIGN LANGUAGE — Token Layer
    ══════════════════════════════════════════════════════════════ */
@@ -90,18 +131,18 @@
   --radius: 0.5rem;
 
   /* Base surfaces — subtle gray page bg */
-  --background: oklch(0.975 0.003 264);
-  --foreground: oklch(0.15 0.025 264);
+  --background: var(--sx-bg);
+  --foreground: var(--sx-text);
 
   /* Cards — white elevated */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.025 264);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.025 264);
+  --card: var(--sx-surface);
+  --card-foreground: var(--sx-text);
+  --popover: var(--sx-surface);
+  --popover-foreground: var(--sx-text);
 
-  /* Primary — SAIREX Blue #2563EB */
-  --primary: oklch(0.546 0.242 264);
-  --primary-foreground: oklch(1 0 0);
+  /* Primary / accent — tenant runtime aware */
+  --primary: var(--tenant-primary);
+  --primary-foreground: var(--sx-primary-foreground);
 
   /* Secondary — light slate */
   --secondary: oklch(0.955 0.005 264);
@@ -112,7 +153,7 @@
   --muted-foreground: oklch(0.52 0.025 264);
 
   /* Accent — light blue tint */
-  --accent: oklch(0.94 0.02 250);
+  --accent: var(--tenant-accent);
   --accent-foreground: oklch(0.25 0.03 264);
 
   /* Destructive — Red #DC2626 (Danger / Overdue / Deleted) */
@@ -120,28 +161,28 @@
   --destructive-foreground: oklch(1 0 0);
 
   /* Borders & inputs — soft */
-  --border: oklch(0.91 0.008 264);
-  --input: oklch(0.91 0.008 264);
-  --ring: oklch(0.546 0.242 264);
+  --border: var(--sx-border);
+  --input: var(--sx-border);
+  --ring: var(--sx-ring);
 
   /* ── Semantic / Functional colors ─────────────────────── */
   /* Success — Green #16A34A (Paid / Active) */
-  --success: oklch(0.585 0.19 145);
+  --success: var(--sx-success);
   --success-foreground: oklch(1 0 0);
 
   /* Warning — Amber #F59E0B (Pending) */
-  --warning: oklch(0.795 0.185 80);
+  --warning: var(--sx-warning);
   --warning-foreground: oklch(0.25 0.04 55);
 
   /* Info — Sky #0EA5E9 (Draft / In progress) */
-  --info: oklch(0.627 0.163 237);
+  --info: var(--sx-info);
   --info-foreground: oklch(1 0 0);
 
   /* ── Fee Status Mapping (fixed rule) ──────────────────── */
-  --fee-paid: oklch(0.585 0.19 145);
-  --fee-unpaid: oklch(0.545 0.245 27);
-  --fee-partial: oklch(0.795 0.185 80);
-  --fee-advance: oklch(0.546 0.242 264);
+  --fee-paid: var(--sx-success);
+  --fee-unpaid: var(--sx-danger);
+  --fee-partial: var(--sx-warning);
+  --fee-advance: var(--sx-primary);
   --fee-refund: oklch(0.585 0.22 305);
 
   /* Charts */
@@ -168,18 +209,18 @@
    ══════════════════════════════════════════════════════════════ */
 .dark {
   /* Base surfaces */
-  --background: oklch(0.14 0.02 264);
-  --foreground: oklch(0.92 0.005 264);
+  --background: var(--sx-bg);
+  --foreground: var(--sx-text);
 
   /* Cards — elevated dark */
-  --card: oklch(0.19 0.02 264);
-  --card-foreground: oklch(0.92 0.005 264);
-  --popover: oklch(0.19 0.02 264);
-  --popover-foreground: oklch(0.92 0.005 264);
+  --card: var(--sx-surface);
+  --card-foreground: var(--sx-text);
+  --popover: var(--sx-surface);
+  --popover-foreground: var(--sx-text);
 
   /* Primary — slightly brighter blue for dark bg */
-  --primary: oklch(0.59 0.235 264);
-  --primary-foreground: oklch(1 0 0);
+  --primary: var(--tenant-primary);
+  --primary-foreground: var(--sx-primary-foreground);
 
   /* Secondary */
   --secondary: oklch(0.24 0.02 264);
@@ -190,7 +231,7 @@
   --muted-foreground: oklch(0.6 0.018 264);
 
   /* Accent */
-  --accent: oklch(0.24 0.02 264);
+  --accent: var(--tenant-accent);
   --accent-foreground: oklch(0.92 0.005 264);
 
   /* Destructive — softer red */
@@ -198,23 +239,23 @@
   --destructive-foreground: oklch(1 0 0);
 
   /* Borders — soft, low contrast */
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.59 0.235 264);
+  --border: var(--sx-border);
+  --input: var(--sx-border);
+  --ring: var(--sx-ring);
 
   /* Semantic — slightly lifted for dark */
-  --success: oklch(0.62 0.185 145);
+  --success: var(--sx-success);
   --success-foreground: oklch(1 0 0);
-  --warning: oklch(0.82 0.18 80);
+  --warning: var(--sx-warning);
   --warning-foreground: oklch(0.2 0.04 55);
-  --info: oklch(0.66 0.16 237);
+  --info: var(--sx-info);
   --info-foreground: oklch(1 0 0);
 
   /* Fee status */
-  --fee-paid: oklch(0.62 0.185 145);
-  --fee-unpaid: oklch(0.6 0.22 25);
-  --fee-partial: oklch(0.82 0.18 80);
-  --fee-advance: oklch(0.59 0.235 264);
+  --fee-paid: var(--sx-success);
+  --fee-unpaid: var(--sx-danger);
+  --fee-partial: var(--sx-warning);
+  --fee-advance: var(--sx-primary);
   --fee-refund: oklch(0.62 0.21 305);
 
   /* Charts */
@@ -255,6 +296,24 @@
   .font-data {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+
+  .bg-surface {
+    background: var(--sx-surface);
+  }
+
+  .text-muted {
+    color: var(--sx-text-muted);
+  }
+
+  /* Temporary migration aid: wrap a page in .debug-tokens to spot styling drift quickly. */
+  .debug-tokens * {
+    outline: 1px solid red;
+  }
+
+  /* Step 9 safety mode: highlights unresolved hardcoded white backgrounds. */
+  .token-debug [class*="bg-white"] {
+    outline: 2px solid red;
   }
 }
 

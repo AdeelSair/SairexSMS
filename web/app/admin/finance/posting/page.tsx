@@ -278,10 +278,10 @@ export default function FinancePostingPage() {
         subtitle="Run monthly fee posting safely with idempotent posting run tracking"
       />
 
-      <div className="rounded-lg border bg-card p-4">
+      <div className="rounded-xl border border-border bg-surface p-4">
         <div className="grid gap-4 md:grid-cols-4">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
               Academic Year
             </p>
             <Select value={selectedAcademicYearId} onValueChange={setSelectedAcademicYearId}>
@@ -299,7 +299,7 @@ export default function FinancePostingPage() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
               Month
             </p>
             <Select value={month} onValueChange={setMonth}>
@@ -317,14 +317,14 @@ export default function FinancePostingPage() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
               Posting Year
             </p>
             <Input value={String(postingYear)} readOnly />
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
               Due Date (optional)
             </p>
             <Input
@@ -348,23 +348,23 @@ export default function FinancePostingPage() {
       </div>
 
       {latestResult && (
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-xl border border-border bg-surface p-4">
           <p className="text-sm font-semibold">Latest Run Summary</p>
           <div className="mt-3 grid gap-3 md:grid-cols-4">
             <div>
-              <p className="text-xs text-muted-foreground">Run ID</p>
+              <p className="text-xs text-muted">Run ID</p>
               <p className="font-data text-xs">{latestResult.postingRunId}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Challans</p>
+              <p className="text-xs text-muted">Challans</p>
               <p className="font-data">{latestResult.totalChallans}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Students</p>
+              <p className="text-xs text-muted">Students</p>
               <p className="font-data">{latestResult.totalStudents}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Posted</p>
+              <p className="text-xs text-muted">Total Posted</p>
               <SxAmount value={latestResult.totalAmount} />
             </div>
           </div>
@@ -374,12 +374,14 @@ export default function FinancePostingPage() {
         </div>
       )}
 
-      <SxDataTable
-        columns={columns}
-        data={runs}
-        loading={loadingRuns}
-        emptyMessage="No posting runs yet."
-      />
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <SxDataTable
+          columns={columns}
+          data={runs}
+          loading={loadingRuns}
+          emptyMessage="No posting runs yet."
+        />
+      </div>
     </div>
   );
 }

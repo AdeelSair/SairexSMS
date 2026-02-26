@@ -15,8 +15,8 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
     alerts.failedMessages;
 
   return (
-    <div className="space-y-3 rounded-lg border bg-card p-4">
-      <h2 className="text-sm font-semibold text-muted-foreground">
+    <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
+      <h2 className="text-sm font-semibold text-muted">
         Attention Required
       </h2>
 
@@ -63,7 +63,7 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
       />
 
       {total === 0 && (
-        <p className="rounded-xl border border-border bg-muted p-3 text-sm text-muted-foreground">
+        <p className="rounded-xl border border-border bg-muted p-3 text-sm text-muted">
           No pending items {"\uD83C\uDF89"}
         </p>
       )}

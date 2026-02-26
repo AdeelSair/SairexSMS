@@ -48,6 +48,8 @@ interface DemoSchoolResponse {
   error?: string;
 }
 
+type TrendTone = "growth" | "decline" | "neutral";
+
 const columns: SxColumn<DashboardStat>[] = [
   {
     key: "label",
@@ -62,6 +64,27 @@ const columns: SxColumn<DashboardStat>[] = [
     render: (row) => <span className="font-data">{String(row.value)}</span>,
   },
 ];
+
+function formatStatValue(stat: DashboardStat): string {
+  if (typeof stat.value === "string") return stat.value;
+  if (stat.format === "currency") return `Rs ${stat.value.toLocaleString("en-PK")}`;
+  if (stat.format === "percent") return `${stat.value}%`;
+  return stat.value.toLocaleString("en-PK");
+}
+
+function resolveTrendTone(stat: DashboardStat): TrendTone {
+  if (typeof stat.value !== "number") return "neutral";
+  if (stat.format !== "percent") return "neutral";
+  if (stat.value > 0) return "growth";
+  if (stat.value < 0) return "decline";
+  return "neutral";
+}
+
+function trendClass(tone: TrendTone): string {
+  if (tone === "growth") return "text-[var(--sx-success)]";
+  if (tone === "decline") return "text-[var(--sx-danger)]";
+  return "text-muted";
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -94,7 +117,7 @@ export default function DashboardPage() {
     setIsSuperAdmin(Boolean(result.data.isSuperAdmin));
     setHasOrganizationContext(Boolean(result.data.organizationId));
     setMode(result.data.mode);
-    if (result.data.isSimple) {
+    if (result.data.isSimple && !result.data.isSuperAdmin) {
       router.replace("/mobile/dashboard");
     }
   }, [router]);
@@ -120,7 +143,7 @@ export default function DashboardPage() {
         ? "Pro mode enabled"
         : "Simple mode enabled",
     );
-    if (result.data.mode === "SIMPLE") {
+    if (result.data.mode === "SIMPLE" && !isSuperAdmin) {
       router.replace("/mobile/dashboard");
       return;
     }
@@ -179,7 +202,7 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-background">
       <SxPageHeader
         title="Dashboard"
         subtitle={subtitle}
@@ -210,7 +233,25 @@ export default function DashboardPage() {
 
       <PlanUsageCard />
 
+      {stats.length > 0 ? (
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {stats.slice(0, 4).map((stat) => {
+            const tone = resolveTrendTone(stat);
+            return (
+              <article key={stat.key} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-sm text-muted">{stat.label}</p>
+                <p className="mt-1 text-2xl font-semibold">{formatStatValue(stat)}</p>
+                <p className={`mt-1 text-xs ${trendClass(tone)}`}>
+                  {tone === "growth" ? "Growth" : tone === "decline" ? "Decline" : "Neutral"}
+                </p>
+              </article>
+            );
+          })}
+        </section>
+      ) : null}
+
       <SxDataTable
+        className="rounded-xl border-border bg-surface"
         columns={columns}
         data={stats}
         loading={loading}

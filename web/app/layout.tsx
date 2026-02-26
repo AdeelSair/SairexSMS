@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { AuthSessionProvider } from "@/components/session-provider";
 import { AppQueryProvider } from "@/components/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TenantThemeProvider } from "@/components/tenant-theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -24,30 +27,56 @@ export const metadata: Metadata = {
   description: "Smart Management System — Enterprise ERP",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await auth();
+  const user = session?.user as { organizationId?: string | null } | undefined;
+  const organizationId = user?.organizationId ?? null;
+  const resolvedTheme = organizationId
+    ? await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: {
+          primaryColor: true,
+          accentColor: true,
+        },
+      })
+    : null;
+  const initialPrimary = resolvedTheme?.primaryColor || "#1D4E89";
+  const initialAccent = resolvedTheme?.accentColor || "#39B54A";
+  const initialPrimaryForeground = "#FFFFFF";
+
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <style
+          // Pre-inject tenant colors to avoid first-paint flicker.
+          dangerouslySetInnerHTML={{
+            __html: `:root{--tenant-primary:${initialPrimary};--tenant-accent:${initialAccent};--tenant-primary-foreground:${initialPrimaryForeground};}`,
+          }}
+        />
+      </head>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}
+        className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
         suppressHydrationWarning
       >
         <AuthSessionProvider>
           <AppQueryProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="light"
-              enableSystem
-              disableTransitionOnChange
-            >
-              <TooltipProvider delayDuration={300}>
-                {children}
-                <Toaster richColors position="top-right" />
-              </TooltipProvider>
-            </ThemeProvider>
+            <TenantThemeProvider tenantTheme={resolvedTheme}>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="light"
+                enableSystem
+                disableTransitionOnChange
+              >
+                <TooltipProvider delayDuration={300}>
+                  {children}
+                  <Toaster richColors position="top-right" />
+                </TooltipProvider>
+              </ThemeProvider>
+            </TenantThemeProvider>
           </AppQueryProvider>
         </AuthSessionProvider>
       </body>

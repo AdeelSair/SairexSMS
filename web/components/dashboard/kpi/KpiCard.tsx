@@ -8,12 +8,12 @@ type KpiCardProps = {
 
 export function KpiCard({ label, value, icon }: KpiCardProps) {
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border bg-card p-4">
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+      <div className="flex items-center justify-between text-sm text-muted">
         <span>{label}</span>
         {icon}
       </div>
-      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-2xl font-semibold">{value}</div>
     </div>
   );
 }

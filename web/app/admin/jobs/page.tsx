@@ -24,6 +24,13 @@ import {
 } from "@/components/sx";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -233,12 +240,12 @@ export default function JobMonitorPage() {
           { label: "Completed", count: stats.COMPLETED ?? 0, icon: <CheckCircle2 size={16} />, color: "text-success" },
           { label: "Failed", count: (stats.FAILED ?? 0) + (stats.DEAD ?? 0), icon: <XCircle size={16} />, color: "text-destructive" },
         ].map((s) => (
-          <div key={s.label} className="rounded-lg border border-border bg-card p-3">
+          <div key={s.label} className="rounded-xl border border-border bg-surface p-3">
             <div className={`flex items-center gap-2 ${s.color}`}>
               {s.icon}
               <span className="text-2xl font-bold">{s.count}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+            <p className="mt-1 text-xs text-muted">{s.label}</p>
           </div>
         ))}
       </div>
@@ -253,24 +260,35 @@ export default function JobMonitorPage() {
           </TabsList>
         </Tabs>
 
-        <select
+        <Select
           value={typeFilter}
-          onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+          onValueChange={(value) => {
+            setTypeFilter(value);
+            setPage(1);
+          }}
         >
-          {JOB_TYPES.map((t) => (
-            <option key={t} value={t}>{t === "ALL" ? "All Types" : t}</option>
-          ))}
-        </select>
+          <SelectTrigger className="h-8 w-40 text-xs">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            {JOB_TYPES.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t === "ALL" ? "All Types" : t}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* ── Job Table ── */}
-      <SxDataTable
-        columns={columns}
-        data={data?.jobs ?? []}
-        onRowClick={(job) => setSelectedJob(job)}
-        emptyMessage={loading ? "Loading…" : "No jobs found"}
-      />
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <SxDataTable
+          columns={columns}
+          data={data?.jobs ?? []}
+          onRowClick={(job) => setSelectedJob(job)}
+          emptyMessage={loading ? "Loading…" : "No jobs found"}
+        />
+      </div>
 
       {/* ── Pagination ── */}
       {data && data.pagination.totalPages > 1 && (

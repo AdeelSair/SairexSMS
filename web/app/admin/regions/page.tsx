@@ -285,12 +285,14 @@ export default function GeoHierarchyPage() {
               Add Region
             </SxButton>
           </div>
-          <SxDataTable
-            columns={regionColumns}
-            data={regions as unknown as Record<string, unknown>[]}
-            loading={loading}
-            emptyMessage="No regions defined yet."
-          />
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <SxDataTable
+              columns={regionColumns}
+              data={regions as unknown as Record<string, unknown>[]}
+              loading={loading}
+              emptyMessage="No regions defined yet."
+            />
+          </div>
         </TabsContent>
 
         {/* ── Sub-Regions Tab ──────────────────────────────── */}
@@ -300,12 +302,14 @@ export default function GeoHierarchyPage() {
               Add Sub-Region
             </SxButton>
           </div>
-          <SxDataTable
-            columns={subRegionColumns(regions) as unknown as SxColumn<Record<string, unknown>>[]}
-            data={subRegions as unknown as Record<string, unknown>[]}
-            loading={loading}
-            emptyMessage="No sub-regions defined yet."
-          />
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <SxDataTable
+              columns={subRegionColumns(regions) as unknown as SxColumn<Record<string, unknown>>[]}
+              data={subRegions as unknown as Record<string, unknown>[]}
+              loading={loading}
+              emptyMessage="No sub-regions defined yet."
+            />
+          </div>
         </TabsContent>
 
         {/* ── Cities Tab ───────────────────────────────────── */}
@@ -315,12 +319,14 @@ export default function GeoHierarchyPage() {
               Add City
             </SxButton>
           </div>
-          <SxDataTable
-            columns={cityColumns(regions, subRegions) as unknown as SxColumn<Record<string, unknown>>[]}
-            data={cities as unknown as Record<string, unknown>[]}
-            loading={loading}
-            emptyMessage="No cities defined yet."
-          />
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <SxDataTable
+              columns={cityColumns(regions, subRegions) as unknown as SxColumn<Record<string, unknown>>[]}
+              data={cities as unknown as Record<string, unknown>[]}
+              loading={loading}
+              emptyMessage="No cities defined yet."
+            />
+          </div>
         </TabsContent>
 
         {/* ── Zones Tab ────────────────────────────────────── */}
@@ -330,12 +336,14 @@ export default function GeoHierarchyPage() {
               Add Zone
             </SxButton>
           </div>
-          <SxDataTable
-            columns={zoneColumns(cities, subRegions, regions) as unknown as SxColumn<Record<string, unknown>>[]}
-            data={zones as unknown as Record<string, unknown>[]}
-            loading={loading}
-            emptyMessage="No zones defined yet."
-          />
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <SxDataTable
+              columns={zoneColumns(cities, subRegions, regions) as unknown as SxColumn<Record<string, unknown>>[]}
+              data={zones as unknown as Record<string, unknown>[]}
+              loading={loading}
+              emptyMessage="No zones defined yet."
+            />
+          </div>
         </TabsContent>
       </Tabs>
 

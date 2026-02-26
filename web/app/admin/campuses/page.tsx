@@ -220,6 +220,7 @@ export default function CampusesPage() {
       />
 
       <SxDataTable
+        className="rounded-xl border-border bg-surface"
         columns={columns}
         data={campuses as unknown as Record<string, unknown>[]}
         loading={loading}

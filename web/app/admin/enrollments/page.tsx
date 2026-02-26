@@ -407,9 +407,9 @@ export default function EnrollmentsPage() {
 
       {activeYear && classes.length > 0 && (
         <>
-          <div className="grid gap-4 rounded-lg border bg-card p-4 md:grid-cols-2">
+          <div className="grid gap-4 rounded-xl border border-border bg-surface p-4 md:grid-cols-2">
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
                 Class
               </p>
               <Select value={selectedClassId} onValueChange={setSelectedClassId}>
@@ -427,7 +427,7 @@ export default function EnrollmentsPage() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
                 Section
               </p>
               <Select
@@ -457,11 +457,11 @@ export default function EnrollmentsPage() {
 
           {selectedClass && selectedSection && (
             <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr]">
-              <div className="space-y-3">
+              <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold">Available Students</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted">
                       Not enrolled in {activeYear.name} ({availableStudents.length})
                     </p>
                   </div>
@@ -484,7 +484,7 @@ export default function EnrollmentsPage() {
                 </div>
 
                 <div className="relative">
-                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                   <Input
                     value={availableSearch}
                     onChange={(event) => setAvailableSearch(event.target.value)}
@@ -493,12 +493,14 @@ export default function EnrollmentsPage() {
                   />
                 </div>
 
-                <SxDataTable
-                  columns={availableColumns}
-                  data={availableStudents}
-                  loading={availableLoading}
-                  emptyMessage="No available students in selected campus."
-                />
+                <div className="rounded-xl border border-border bg-surface p-4">
+                  <SxDataTable
+                    columns={availableColumns}
+                    data={availableStudents}
+                    loading={availableLoading}
+                    emptyMessage="No available students in selected campus."
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-center">
@@ -514,16 +516,16 @@ export default function EnrollmentsPage() {
                 </SxButton>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
                 <div>
                   <p className="text-sm font-semibold">Enrolled Students</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted">
                     {selectedSection.name} section ({enrolledStudents.length})
                   </p>
                 </div>
 
                 <div className="relative">
-                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                   <Input
                     value={enrolledSearch}
                     onChange={(event) => setEnrolledSearch(event.target.value)}
@@ -532,12 +534,14 @@ export default function EnrollmentsPage() {
                   />
                 </div>
 
-                <SxDataTable
-                  columns={enrolledColumns}
-                  data={enrolledStudents}
-                  loading={enrolledLoading}
-                  emptyMessage="No students enrolled in this section yet."
-                />
+                <div className="rounded-xl border border-border bg-surface p-4">
+                  <SxDataTable
+                    columns={enrolledColumns}
+                    data={enrolledStudents}
+                    loading={enrolledLoading}
+                    emptyMessage="No students enrolled in this section yet."
+                  />
+                </div>
               </div>
             </div>
           )}

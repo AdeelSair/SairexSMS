@@ -97,6 +97,20 @@ function normalizeStatus(status: AttendanceSheetRow["status"]): MarkStatus {
   return "PRESENT";
 }
 
+function statusButtonClass(isActive: boolean, status: MarkStatus): string {
+  if (!isActive) {
+    return "h-8 border-border bg-surface px-3 text-foreground hover:bg-muted/40";
+  }
+
+  if (status === "PRESENT") {
+    return "h-8 border-transparent bg-[var(--sx-success)] px-3 text-white hover:opacity-90";
+  }
+  if (status === "ABSENT") {
+    return "h-8 border-transparent bg-[var(--sx-danger)] px-3 text-white hover:opacity-90";
+  }
+  return "h-8 border-transparent bg-[var(--sx-warning)] px-3 text-white hover:opacity-90";
+}
+
 export default function AttendancePage() {
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [classes, setClasses] = useState<ClassWithSections[]>([]);
@@ -310,22 +324,22 @@ export default function AttendancePage() {
         render: (row) => (
           <div className="flex items-center gap-2">
             <SxButton
-              sxVariant={row.status === "PRESENT" ? "primary" : "outline"}
-              className="h-8 px-3"
+              sxVariant="outline"
+              className={statusButtonClass(row.status === "PRESENT", "PRESENT")}
               onClick={() => setRowStatus(row.enrollmentId, "PRESENT")}
             >
               Present
             </SxButton>
             <SxButton
-              sxVariant={row.status === "ABSENT" ? "danger" : "outline"}
-              className="h-8 px-3"
+              sxVariant="outline"
+              className={statusButtonClass(row.status === "ABSENT", "ABSENT")}
               onClick={() => setRowStatus(row.enrollmentId, "ABSENT")}
             >
               Absent
             </SxButton>
             <SxButton
-              sxVariant={row.status === "LEAVE" ? "secondary" : "outline"}
-              className="h-8 px-3"
+              sxVariant="outline"
+              className={statusButtonClass(row.status === "LEAVE", "LEAVE")}
               onClick={() => setRowStatus(row.enrollmentId, "LEAVE")}
             >
               Leave
@@ -341,7 +355,7 @@ export default function AttendancePage() {
   const noClasses = !!activeYear && !loadingBoot && classes.length === 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-background">
       <SxPageHeader
         title="Mark Attendance"
         subtitle="Select date, class, and section to mark attendance quickly"
@@ -388,13 +402,13 @@ export default function AttendancePage() {
 
       {activeYear && classes.length > 0 && (
         <>
-          <div className="grid gap-4 rounded-lg border bg-card p-4 lg:grid-cols-3">
+          <div className="grid gap-4 rounded-xl border border-border bg-surface p-4 lg:grid-cols-3">
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
                 Date
               </p>
               <div className="relative">
-                <Calendar size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Calendar size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                 <Input
                   type="date"
                   value={selectedDate}
@@ -407,7 +421,7 @@ export default function AttendancePage() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
                 Class
               </p>
               <Select value={selectedClassId} onValueChange={setSelectedClassId}>
@@ -425,7 +439,7 @@ export default function AttendancePage() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
                 Section
               </p>
               <Select
@@ -455,11 +469,11 @@ export default function AttendancePage() {
 
           {selectedSectionId && dateInYear && (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
                 <div className="flex items-center gap-2">
                   <SxStatusBadge variant="success">Present: {summary.present}</SxStatusBadge>
-                  <SxStatusBadge variant="warning">Absent: {summary.absent}</SxStatusBadge>
-                  <SxStatusBadge variant="info">Leave: {summary.leave}</SxStatusBadge>
+                  <SxStatusBadge variant="destructive">Absent: {summary.absent}</SxStatusBadge>
+                  <SxStatusBadge variant="warning">Leave: {summary.leave}</SxStatusBadge>
                   <SxStatusBadge variant="outline">Total: {summary.total}</SxStatusBadge>
                 </div>
                 <div className="flex items-center gap-2">
@@ -476,6 +490,7 @@ export default function AttendancePage() {
               </div>
 
               <SxDataTable
+                className="rounded-xl border-border bg-transparent"
                 columns={columns}
                 data={records}
                 loading={loadingSheet}
@@ -485,6 +500,7 @@ export default function AttendancePage() {
               <div className="flex justify-end">
                 <SxButton
                   sxVariant="primary"
+                  className="h-11 text-base font-medium"
                   loading={saving}
                   onClick={saveAttendance}
                   disabled={records.length === 0}

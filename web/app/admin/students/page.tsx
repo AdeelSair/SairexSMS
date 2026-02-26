@@ -204,6 +204,7 @@ export default function StudentsPage() {
       />
 
       <SxDataTable
+        className="rounded-xl border-border bg-surface"
         columns={columns}
         data={students as unknown as Record<string, unknown>[]}
         loading={loading}
@@ -223,8 +224,8 @@ export default function StudentsPage() {
           <Form {...form}>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               {/* Placement section */}
-              <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="space-y-3 rounded-xl border border-border bg-surface p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted">
                   Placement
                 </p>
 

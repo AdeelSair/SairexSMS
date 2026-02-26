@@ -610,6 +610,9 @@ model Organization {
   logoLightUrl  String?
   logoDarkUrl   String?
   logoPrintUrl  String?
+  primaryColor  String? @db.VarChar(7)
+  accentColor   String? @db.VarChar(7)
+  themeMode     String? @default("light")
 
   /// Finance
   financeRoutingMode FinanceRoutingMode @default(CAMPUS_PRIMARY)

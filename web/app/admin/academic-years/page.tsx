@@ -458,6 +458,7 @@ export default function AcademicYearsPage() {
 
       {/* ── Data Table ────────────────────────────────────── */}
       <SxDataTable
+        className="rounded-xl border-border bg-surface"
         columns={columnsWithActions as unknown as SxColumn<Record<string, unknown>>[]}
         data={years as unknown as Record<string, unknown>[]}
         loading={loading}
@@ -574,11 +575,11 @@ export default function AcademicYearsPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
-              <CalendarRange size={16} className="shrink-0 text-muted-foreground" />
+            <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+              <CalendarRange size={16} className="shrink-0 text-muted" />
               <div>
                 <p className="text-sm font-medium">{confirmAction.year.name}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted">
                   {formatDate(confirmAction.year.startDate)} — {formatDate(confirmAction.year.endDate)}
                 </p>
               </div>

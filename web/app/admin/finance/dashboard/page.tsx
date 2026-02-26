@@ -344,10 +344,10 @@ export default function FinanceDashboardPage() {
         />
       </div>
 
-      <div className="rounded-lg border bg-card p-4">
+      <div className="rounded-xl border border-border bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-semibold">Collected vs Generated</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted">
             {dashboard ? `${dashboard.kpis.collectedAmount.toFixed(0)} / ${dashboard.kpis.generatedAmount.toFixed(0)}` : "0 / 0"}
           </p>
         </div>
@@ -360,13 +360,13 @@ export default function FinanceDashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-xl border border-border bg-surface p-4">
           <p className="mb-4 text-sm font-semibold">MRR Trend (last 12 closed months)</p>
           <div className="space-y-3">
             {(dashboard?.trend ?? []).map((point) => (
               <div key={`${point.year}-${point.month}`} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">{point.label}</span>
+                  <span className="text-muted">{point.label}</span>
                   <span className="font-data"><SxAmount value={point.mrr} /></span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-muted">
@@ -378,13 +378,13 @@ export default function FinanceDashboardPage() {
               </div>
             ))}
             {dashboard?.trend.length === 0 && (
-              <p className="text-sm text-muted-foreground">No closed-cycle trend data available.</p>
+              <p className="text-sm text-muted">No closed-cycle trend data available.</p>
             )}
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-xl border border-border bg-surface p-4">
             <p className="mb-3 text-sm font-semibold">Automation Health</p>
             <div className="space-y-2 text-sm">
               <Row label="Last activity" value={dashboard?.automationHealth.lastCronActivityAt ? new Date(dashboard.automationHealth.lastCronActivityAt).toLocaleString("en-PK") : "No run data"} />
@@ -394,7 +394,7 @@ export default function FinanceDashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-xl border border-border bg-surface p-4">
             <p className="mb-3 text-sm font-semibold">Alerts & Insights</p>
             <div className="space-y-2">
               {(dashboard?.alerts ?? []).map((alert, index) => (
@@ -408,7 +408,7 @@ export default function FinanceDashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-xl border border-border bg-surface p-4">
             <p className="mb-3 text-sm font-semibold">Mode Distribution</p>
             <Row
               label="Generated Fee Orgs"
@@ -422,16 +422,18 @@ export default function FinanceDashboardPage() {
         </div>
       </div>
 
-      <SxDataTable
-        columns={columns}
-        data={dashboard?.organizationTable ?? []}
-        onRowClick={(row) => {
-          setSelectedOrganizationId(row.organizationId);
-          setDrawerOpen(true);
-        }}
-        loading={loading}
-        emptyMessage="No organization revenue data for selected filters."
-      />
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <SxDataTable
+          columns={columns}
+          data={dashboard?.organizationTable ?? []}
+          onRowClick={(row) => {
+            setSelectedOrganizationId(row.organizationId);
+            setDrawerOpen(true);
+          }}
+          loading={loading}
+          emptyMessage="No organization revenue data for selected filters."
+        />
+      </div>
 
       <OrgRevenueDrawer
         organizationId={selectedOrganizationId}
@@ -460,8 +462,8 @@ function yearOptions(currentYear: number): number[] {
 
 function FilterCard(props: { label: string; control: ReactNode }) {
   return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="rounded-xl border border-border bg-surface p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
         {props.label}
       </p>
       {props.control}
@@ -476,8 +478,8 @@ function KpiCard(props: {
   emphasize?: boolean;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted">
         {props.label}
       </p>
       <div className="mt-2 flex items-center justify-between gap-2">
@@ -512,7 +514,7 @@ function SxRiskTrendBadge(props: { trend: "IMPROVING" | "WORSENING" | "STABLE" }
 function Row(props: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{props.label}</span>
+      <span className="text-muted">{props.label}</span>
       <span className="font-data text-xs">{props.value}</span>
     </div>
   );

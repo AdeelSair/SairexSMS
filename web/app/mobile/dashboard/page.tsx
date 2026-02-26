@@ -74,13 +74,13 @@ export default function MobileDashboardPage() {
   }
 
   if (isLoading && !actions) {
-    return <div className="p-4 text-sm text-muted-foreground">Loading actions...</div>;
+    return <div className="min-h-screen bg-background p-4 text-sm text-muted">Loading actions...</div>;
   }
 
   if (isError || !actions) {
     return (
-      <div className="p-4">
-        <Card>
+      <div className="min-h-screen bg-background p-4">
+        <Card className="rounded-xl border border-border bg-surface">
           <CardContent className="p-4 text-sm">Failed to load dashboard.</CardContent>
         </Card>
       </div>
@@ -94,11 +94,11 @@ export default function MobileDashboardPage() {
   const topAction = getTopAction(actions);
 
   return (
-    <div className="space-y-6 p-4 pb-20">
-      <div>
-        <p className="text-sm text-muted-foreground">Today&apos;s Work Queue</p>
+    <div className="min-h-screen space-y-4 bg-background p-4 pb-20">
+      <header className="rounded-xl border border-border bg-surface p-4">
+        <p className="text-sm text-muted">Today&apos;s Work Queue</p>
         <h1 className="text-xl font-bold">Action Dashboard</h1>
-      </div>
+      </header>
 
       <PerformanceStrip
         completed={actions.meta.completedToday}
@@ -124,7 +124,7 @@ export default function MobileDashboardPage() {
                     }}
                   />
                 ) : (
-                  <p className="text-sm text-muted-foreground">No actions right now.</p>
+                  <p className="text-sm text-muted">No actions right now.</p>
                 )}
 
                 {!showAll ? (
@@ -197,7 +197,7 @@ export default function MobileDashboardPage() {
                     />
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No urgent actions right now.</p>
+                  <p className="text-sm text-muted">No urgent actions right now.</p>
                 )}
               </>
             )}
@@ -219,7 +219,7 @@ export default function MobileDashboardPage() {
                     />
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">Nothing pending in this bucket.</p>
+                  <p className="text-sm text-muted">Nothing pending in this bucket.</p>
                 )}
               </section>
 
@@ -237,7 +237,7 @@ export default function MobileDashboardPage() {
                     />
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No informational actions.</p>
+                  <p className="text-sm text-muted">No informational actions.</p>
                 )}
               </section>
             </>
@@ -257,7 +257,7 @@ export default function MobileDashboardPage() {
         </Button>
       ) : null}
 
-      <Card>
+      <Card className="rounded-xl border border-border bg-surface">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Completed Today</CardTitle>
         </CardHeader>
@@ -265,14 +265,14 @@ export default function MobileDashboardPage() {
           {actions.completedToday.length ? (
             actions.completedToday.map((action) => (
               <div key={action.id} className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{action.title}</span>
+                <span className="text-muted">{action.title}</span>
                 <span className="font-semibold">
                   {action.count ? action.count.toLocaleString("en-PK") : "Done"}
                 </span>
               </div>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">Complete an action to build momentum.</p>
+            <p className="text-sm text-muted">Complete an action to build momentum.</p>
           )}
         </CardContent>
       </Card>

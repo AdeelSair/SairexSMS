@@ -7,13 +7,13 @@ interface TaskPanelProps {
 
 export function TaskPanel({ tasks }: TaskPanelProps) {
   return (
-    <div className="space-y-3 rounded-lg border bg-card p-4">
-      <h2 className="text-sm font-semibold text-muted-foreground">
+    <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
+      <h2 className="text-sm font-semibold text-muted">
         Task Pipeline
       </h2>
 
       {tasks.length === 0 && (
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm text-muted">
           All caught up {"\uD83C\uDF89"}
         </div>
       )}
