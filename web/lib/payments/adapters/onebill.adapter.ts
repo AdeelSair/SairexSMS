@@ -37,14 +37,15 @@ export class OnebillAdapter implements PaymentGatewayAdapter {
   }
 
   verifyWebhook(
-    payload: Record<string, unknown>,
+    _payload: Record<string, unknown>,
     signature: string | null,
+    _headers: Record<string, string>,
+    rawBody: string,
   ): boolean {
     if (!signature || !this.config.webhookSecret) return false;
 
-    const body = JSON.stringify(payload);
     const expected = createHmac("sha256", this.config.webhookSecret)
-      .update(body)
+      .update(rawBody)
       .digest("hex");
 
     return expected === signature;

@@ -16,6 +16,7 @@ interface WebhookJobData {
   jobId: string;
   gateway: PaymentGateway;
   payload: Record<string, unknown>;
+  rawBody: string;
   signature: string | null;
   headers: Record<string, string>;
   receivedAt: string;
@@ -28,13 +29,14 @@ export function startWebhookWorker() {
       const data = job.data;
 
       if (data.jobId) {
-        await startJob(data.jobId);
+        await startJob(data.jobId, job.attemptsMade + 1);
       }
 
       try {
         const result = await processWebhook({
           gateway: data.gateway,
           payload: data.payload,
+          rawBody: data.rawBody,
           signature: data.signature,
           headers: data.headers,
         });
@@ -55,7 +57,12 @@ export function startWebhookWorker() {
         const msg = err instanceof Error ? err.message : "Unknown webhook processing error";
 
         if (data.jobId) {
-          await failJob(data.jobId, msg);
+          await failJob(
+            data.jobId,
+            msg,
+            job.attemptsMade + 1,
+            job.opts.attempts ?? 3,
+          );
         }
 
         console.error(`[Webhook Worker] ${data.gateway} failed:`, msg);

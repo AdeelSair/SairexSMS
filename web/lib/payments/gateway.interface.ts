@@ -53,6 +53,7 @@ export interface PaymentGatewayAdapter {
     payload: Record<string, unknown>,
     signature: string | null,
     headers: Record<string, string>,
+    rawBody: string,
   ): boolean;
 
   normalizeWebhook(payload: Record<string, unknown>): NormalizedPayment;

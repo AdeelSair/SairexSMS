@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyOtp, OtpError } from "@/lib/adoption/otp.service";
 import { prisma } from "@/lib/prisma";
 import { emit } from "@/lib/events";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 /**
  * POST /api/auth/phone/verify
@@ -13,6 +14,9 @@ import { emit } from "@/lib/events";
  * Returns: { success, userId, isNewUser, memberships }
  */
 export async function POST(request: Request) {
+  const blocked = applyRateLimit(request, "auth:phone-verify", RATE_LIMITS.OTP_VERIFY);
+  if (blocked) return blocked;
+
   try {
     const body = await request.json();
     const { otpSessionId, code } = body;

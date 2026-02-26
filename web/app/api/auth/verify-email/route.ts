@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 /**
  * GET /api/auth/verify-email?token=xxx
@@ -8,6 +9,9 @@ import { prisma } from "@/lib/prisma";
  * and redirects to the login page.
  */
 export async function GET(request: Request) {
+  const blocked = applyRateLimit(request, "auth:verify-email", RATE_LIMITS.LOGIN_ATTEMPT);
+  if (blocked) return blocked;
+
   const { searchParams } = new URL(request.url);
   const token = searchParams.get("token");
 

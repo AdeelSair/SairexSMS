@@ -1,6 +1,7 @@
 import { Worker, Job as BullJob } from "bullmq";
 import { getRedisConnection } from "../connection";
 import { BULK_SMS_QUEUE, SMS_QUEUE } from "../queues";
+import { completeJob, failJob, startJob } from "../enqueue";
 
 export interface BulkSmsJobData {
   jobId: string;
@@ -14,41 +15,40 @@ export interface BulkSmsJobData {
  * spawns an individual SMS job for each recipient.
  */
 async function processBulkSmsJob(bull: BullJob<BulkSmsJobData>): Promise<void> {
-  const { prisma } = await import("@/lib/prisma");
   const { enqueue } = await import("../enqueue");
 
   const { jobId, message, recipients, organizationId } = bull.data;
+  const attemptsMade = bull.attemptsMade + 1;
+  const maxAttempts = bull.opts.attempts ?? 3;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
-  });
+  await startJob(jobId, attemptsMade);
 
-  const childJobs: string[] = [];
+  try {
+    const childJobs: string[] = [];
 
-  for (const recipient of recipients) {
-    const personalised = recipient.name
-      ? message.replace(/\{name\}/gi, recipient.name)
-      : message;
+    for (const recipient of recipients) {
+      const personalised = recipient.name
+        ? message.replace(/\{name\}/gi, recipient.name)
+        : message;
 
-    const childId = await enqueue({
-      type: "SMS",
-      queue: SMS_QUEUE,
-      organizationId,
-      payload: { to: recipient.phone, message: personalised },
+      const childId = await enqueue({
+        type: "SMS",
+        queue: SMS_QUEUE,
+        organizationId,
+        payload: { to: recipient.phone, message: personalised },
+      });
+      childJobs.push(childId);
+    }
+
+    await completeJob(jobId, {
+      totalRecipients: recipients.length,
+      childJobs,
     });
-    childJobs.push(childId);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown bulk SMS error";
+    await failJob(jobId, errorMsg, attemptsMade, maxAttempts);
+    throw err;
   }
-
-  await prisma.job.update({
-    where: { id: jobId },
-    data: {
-      status: "COMPLETED",
-      completedAt: new Date(),
-      error: null,
-      result: { totalRecipients: recipients.length, childJobs },
-    },
-  });
 }
 
 export function startBulkSmsWorker(): Worker<BulkSmsJobData> {

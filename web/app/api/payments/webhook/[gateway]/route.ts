@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { enqueue, WEBHOOK_QUEUE } from "@/lib/queue";
 import type { PaymentGateway } from "@/lib/generated/prisma";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 const VALID_GATEWAYS: Set<string> = new Set([
-  "EASYPAISA", "JAZZCASH", "ONEBILL", "KUICKPAY", "STRIPE",
+  "EASYPAISA", "JAZZCASH", "ONEBILL", "STRIPE",
 ]);
 
 /**
@@ -21,6 +22,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ gateway: string }> },
 ) {
+  const blocked = applyRateLimit(request, "payments:webhook", RATE_LIMITS.WEBHOOK);
+  if (blocked) return blocked;
+
   const { gateway } = await params;
   const gatewayUpper = gateway.toUpperCase();
 
@@ -29,7 +33,12 @@ export async function POST(
   }
 
   try {
-    const payload = await request.json();
+    const rawBody = await request.text();
+    if (!rawBody) {
+      return NextResponse.json({ received: false, error: "Empty payload" }, { status: 400 });
+    }
+
+    const payload = JSON.parse(rawBody) as Record<string, unknown>;
 
     const signature =
       request.headers.get("x-signature") ??
@@ -48,6 +57,7 @@ export async function POST(
       payload: {
         gateway: gatewayUpper as PaymentGateway,
         payload,
+        rawBody,
         signature,
         headers,
         receivedAt: new Date().toISOString(),

@@ -1,6 +1,7 @@
 import { Worker, Job as BullJob } from "bullmq";
 import { getRedisConnection } from "../connection";
 import { OTP_QUEUE } from "../queues";
+import { completeJob, failJob, startJob } from "../enqueue";
 
 export interface OtpJobData {
   jobId: string;
@@ -10,15 +11,13 @@ export interface OtpJobData {
 }
 
 async function processOtpJob(bull: BullJob<OtpJobData>): Promise<void> {
-  const { prisma } = await import("@/lib/prisma");
   const { sendEmail } = await import("@/lib/email");
 
   const { jobId, channel, target, code } = bull.data;
+  const attemptsMade = bull.attemptsMade + 1;
+  const maxAttempts = bull.opts.attempts ?? 3;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
-  });
+  await startJob(jobId, attemptsMade);
 
   try {
     let success = false;
@@ -73,20 +72,10 @@ async function processOtpJob(bull: BullJob<OtpJobData>): Promise<void> {
       throw new Error(`OTP delivery failed via ${channel} to ${target}`);
     }
 
-    await prisma.job.update({
-      where: { id: jobId },
-      data: { status: "COMPLETED", completedAt: new Date(), error: null },
-    });
+    await completeJob(jobId, { channel, target });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown OTP error";
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: bull.attemptsMade + 1 >= (bull.opts.attempts ?? 3) ? "DEAD" : "FAILED",
-        failedAt: new Date(),
-        error: errorMsg,
-      },
-    });
+    await failJob(jobId, errorMsg, attemptsMade, maxAttempts);
     throw new Error(`OTP delivery failed to ${target}: ${errorMsg}`);
   }
 }

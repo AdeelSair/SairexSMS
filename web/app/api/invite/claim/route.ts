@@ -5,6 +5,7 @@ import {
   claimQRInvite,
   QRInviteError,
 } from "@/lib/adoption/qr-invite.service";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 const claimInviteSchema = z.object({
   token: z.string().min(1),
@@ -15,6 +16,9 @@ const claimInviteSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const blocked = applyRateLimit(request, "invite:claim", RATE_LIMITS.OTP_VERIFY);
+  if (blocked) return blocked;
+
   try {
     const body = await request.json();
     const parsed = claimInviteSchema.safeParse(body);

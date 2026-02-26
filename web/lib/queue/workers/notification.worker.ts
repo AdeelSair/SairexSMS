@@ -1,6 +1,7 @@
 import { Worker, Job as BullJob } from "bullmq";
 import { getRedisConnection } from "../connection";
 import { NOTIFICATION_QUEUE, EMAIL_QUEUE, SMS_QUEUE, WHATSAPP_QUEUE } from "../queues";
+import { completeJob, failJob, startJob } from "../enqueue";
 
 export interface NotificationJobData {
   jobId: string;
@@ -28,65 +29,61 @@ const MESSAGES = {
  * individual EMAIL, SMS, and WHATSAPP child jobs.
  */
 async function processNotificationJob(bull: BullJob<NotificationJobData>): Promise<void> {
-  const { prisma } = await import("@/lib/prisma");
   const { enqueue } = await import("../enqueue");
 
   const { jobId, studentName, parentEmail, parentPhone, challanNo, totalAmount, dueDate, type, organizationId } = bull.data;
+  const attemptsMade = bull.attemptsMade + 1;
+  const maxAttempts = bull.opts.attempts ?? 3;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
-  });
+  await startJob(jobId, attemptsMade);
 
-  const message = MESSAGES[type](studentName, challanNo, totalAmount, dueDate);
-  const childJobs: string[] = [];
+  try {
+    const message = MESSAGES[type](studentName, challanNo, totalAmount, dueDate);
+    const childJobs: string[] = [];
 
-  if (parentEmail) {
-    const emailJobId = await enqueue({
-      type: "EMAIL",
-      queue: EMAIL_QUEUE,
-      organizationId,
-      payload: {
-        to: parentEmail,
-        subject: `Fee Notification - ${type}`,
-        html: `
+    if (parentEmail) {
+      const emailJobId = await enqueue({
+        type: "EMAIL",
+        queue: EMAIL_QUEUE,
+        organizationId,
+        payload: {
+          to: parentEmail,
+          subject: `Fee Notification - ${type}`,
+          html: `
           <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
             <h2 style="color: #1e40af;">SAIREX SMS</h2>
             <p>${message}</p>
           </div>
         `,
-      },
-    });
-    childJobs.push(emailJobId);
+        },
+      });
+      childJobs.push(emailJobId);
+    }
+
+    if (parentPhone) {
+      const smsJobId = await enqueue({
+        type: "SMS",
+        queue: SMS_QUEUE,
+        organizationId,
+        payload: { to: parentPhone, message },
+      });
+      childJobs.push(smsJobId);
+
+      const waJobId = await enqueue({
+        type: "WHATSAPP",
+        queue: WHATSAPP_QUEUE,
+        organizationId,
+        payload: { to: parentPhone, message },
+      });
+      childJobs.push(waJobId);
+    }
+
+    await completeJob(jobId, { childJobs });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown notification error";
+    await failJob(jobId, errorMsg, attemptsMade, maxAttempts);
+    throw err;
   }
-
-  if (parentPhone) {
-    const smsJobId = await enqueue({
-      type: "SMS",
-      queue: SMS_QUEUE,
-      organizationId,
-      payload: { to: parentPhone, message },
-    });
-    childJobs.push(smsJobId);
-
-    const waJobId = await enqueue({
-      type: "WHATSAPP",
-      queue: WHATSAPP_QUEUE,
-      organizationId,
-      payload: { to: parentPhone, message },
-    });
-    childJobs.push(waJobId);
-  }
-
-  await prisma.job.update({
-    where: { id: jobId },
-    data: {
-      status: "COMPLETED",
-      completedAt: new Date(),
-      error: null,
-      result: { childJobs },
-    },
-  });
 }
 
 export function startNotificationWorker(): Worker<NotificationJobData> {

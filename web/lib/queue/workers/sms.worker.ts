@@ -1,6 +1,7 @@
 import { Worker, Job as BullJob } from "bullmq";
 import { getRedisConnection } from "../connection";
 import { SMS_QUEUE } from "../queues";
+import { completeJob, failJob, startJob } from "../enqueue";
 
 export interface SmsJobData {
   jobId: string;
@@ -9,33 +10,21 @@ export interface SmsJobData {
 }
 
 async function processSmsJob(bull: BullJob<SmsJobData>): Promise<void> {
-  const { prisma } = await import("@/lib/prisma");
   const { sendSmsMessage } = await import("@/lib/sms");
 
   const { jobId, to, message } = bull.data;
+  const attemptsMade = bull.attemptsMade + 1;
+  const maxAttempts = bull.opts.attempts ?? 3;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
-  });
+  await startJob(jobId, attemptsMade);
 
   try {
     await sendSmsMessage(to, message);
 
-    await prisma.job.update({
-      where: { id: jobId },
-      data: { status: "COMPLETED", completedAt: new Date(), error: null },
-    });
+    await completeJob(jobId, { to });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown SMS error";
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: bull.attemptsMade + 1 >= (bull.opts.attempts ?? 3) ? "DEAD" : "FAILED",
-        failedAt: new Date(),
-        error: errorMsg,
-      },
-    });
+    await failJob(jobId, errorMsg, attemptsMade, maxAttempts);
     throw new Error(`SMS delivery failed to ${to}: ${errorMsg}`);
   }
 }

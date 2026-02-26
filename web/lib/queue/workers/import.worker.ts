@@ -1,6 +1,7 @@
 import { Worker, Job as BullJob } from "bullmq";
 import { getRedisConnection } from "../connection";
 import { IMPORT_QUEUE } from "../queues";
+import { completeJob, failJob, startJob } from "../enqueue";
 
 export interface ImportJobData {
   jobId: string;
@@ -52,11 +53,10 @@ async function processImportJob(bull: BullJob<ImportJobData>): Promise<void> {
   const { prisma } = await import("@/lib/prisma");
 
   const { jobId, importType, organizationId, campusId, csvData } = bull.data;
+  const attemptsMade = bull.attemptsMade + 1;
+  const maxAttempts = bull.opts.attempts ?? 3;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
-  });
+  await startJob(jobId, attemptsMade);
 
   try {
     if (importType !== "STUDENTS") {
@@ -99,30 +99,16 @@ async function processImportJob(bull: BullJob<ImportJobData>): Promise<void> {
       }
     }
 
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: "COMPLETED",
-        completedAt: new Date(),
-        error: errors.length > 0 ? errors.join("; ") : null,
-        result: {
-          totalRows: rows.length,
-          created,
-          skipped,
-          errorCount: errors.length,
-        },
-      },
+    await completeJob(jobId, {
+      totalRows: rows.length,
+      created,
+      skipped,
+      errorCount: errors.length,
+      errors,
     });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown import error";
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: bull.attemptsMade + 1 >= (bull.opts.attempts ?? 3) ? "DEAD" : "FAILED",
-        failedAt: new Date(),
-        error: errorMsg,
-      },
-    });
+    await failJob(jobId, errorMsg, attemptsMade, maxAttempts);
     throw new Error(`Student import failed: ${errorMsg}`);
   }
 }

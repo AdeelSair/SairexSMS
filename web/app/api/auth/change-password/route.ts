@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-guard";
 import bcrypt from "bcryptjs";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 // POST: Change password (authenticated user changes their own password)
 export async function POST(request: Request) {
+  const blocked = applyRateLimit(request, "auth:change-password", RATE_LIMITS.LOGIN_ATTEMPT);
+  if (blocked) return blocked;
+
   const guard = await requireAuth();
   if (guard instanceof NextResponse) return guard;
 

@@ -203,6 +203,7 @@ export async function initiatePayment(
 export interface ProcessWebhookInput {
   gateway: PaymentGateway;
   payload: Record<string, unknown>;
+  rawBody: string;
   signature: string | null;
   headers: Record<string, string>;
 }
@@ -216,12 +217,19 @@ export interface ProcessWebhookResult {
 export async function processWebhook(
   input: ProcessWebhookInput,
 ): Promise<ProcessWebhookResult> {
-  const { adapter } = await resolveGatewayAdapterByType(input.gateway);
+  const { adapter } = await resolveGatewayAdapterByType(
+    input.gateway,
+    input.payload,
+    input.signature,
+    input.headers,
+    input.rawBody,
+  );
 
   const signatureValid = adapter.verifyWebhook(
     input.payload,
     input.signature,
     input.headers,
+    input.rawBody,
   );
 
   if (!signatureValid && input.gateway !== "MANUAL") {
@@ -346,9 +354,88 @@ export async function processWebhook(
 
 async function resolveGatewayAdapterByType(
   gateway: PaymentGateway,
+  payload: Record<string, unknown>,
+  signature: string | null,
+  headers: Record<string, string>,
+  rawBody: string,
 ): Promise<{ adapter: PaymentGatewayAdapter }> {
-  const config: GatewayConfig = {};
-  return { adapter: createAdapter(gateway, config) };
+  if (gateway === "MANUAL") {
+    return { adapter: createAdapter(gateway, {}) };
+  }
+
+  const gatewayRef = extractGatewayRef(gateway, payload);
+  if (gatewayRef) {
+    const record = await prisma.paymentRecord.findFirst({
+      where: { gateway, gatewayRef },
+      select: { organizationId: true },
+    });
+
+    if (record?.organizationId) {
+      const orgConfig = await prisma.organizationPaymentConfig.findUnique({
+        where: { organizationId: record.organizationId },
+        select: {
+          isActive: true,
+          enabledJson: true,
+          configJson: true,
+        },
+      });
+      if (orgConfig?.isActive) {
+        const enabled = (orgConfig.enabledJson as string[] | null) ?? [];
+        if (enabled.includes(gateway)) {
+          const configMap =
+            (orgConfig.configJson as Record<string, GatewayConfig> | null) ?? {};
+          const adapter = createAdapter(gateway, configMap[gateway] ?? {});
+          return { adapter };
+        }
+      }
+    }
+  }
+
+  const activeConfigs = await prisma.organizationPaymentConfig.findMany({
+    where: { isActive: true },
+    select: {
+      enabledJson: true,
+      configJson: true,
+    },
+  });
+
+  for (const configRow of activeConfigs) {
+    const enabled = (configRow.enabledJson as string[] | null) ?? [];
+    if (!enabled.includes(gateway)) continue;
+
+    const configMap =
+      (configRow.configJson as Record<string, GatewayConfig> | null) ?? {};
+    const candidate = createAdapter(gateway, configMap[gateway] ?? {});
+    if (candidate.verifyWebhook(payload, signature, headers, rawBody)) {
+      return { adapter: candidate };
+    }
+  }
+
+  throw new PaymentServiceError(
+    `No active configuration found for ${gateway}`,
+    "GATEWAY_NOT_CONFIGURED",
+  );
+}
+
+function extractGatewayRef(
+  gateway: PaymentGateway,
+  payload: Record<string, unknown>,
+): string | null {
+  if (gateway === "STRIPE") {
+    const data = (payload.data as Record<string, unknown> | undefined) ?? {};
+    const object = (data.object as Record<string, unknown> | undefined) ?? {};
+    return String(object.id ?? payload.id ?? "").trim() || null;
+  }
+  if (gateway === "JAZZCASH") {
+    return String(payload.pp_TxnRefNo ?? "").trim() || null;
+  }
+  if (gateway === "EASYPAISA") {
+    return String(payload.orderRefNumber ?? payload.orderRefNum ?? "").trim() || null;
+  }
+  if (gateway === "ONEBILL") {
+    return String(payload.billReference ?? payload.transactionId ?? "").trim() || null;
+  }
+  return null;
 }
 
 async function resolveChallanFromRef(

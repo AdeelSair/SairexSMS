@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requestOtp, OtpError } from "@/lib/adoption/otp.service";
 import { emit } from "@/lib/events";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 /**
  * POST /api/auth/phone
@@ -12,6 +13,9 @@ import { emit } from "@/lib/events";
  * Returns: { otpSessionId, expiresAt, channel }
  */
 export async function POST(request: Request) {
+  const blocked = applyRateLimit(request, "auth:phone-request", RATE_LIMITS.OTP_REQUEST);
+  if (blocked) return blocked;
+
   try {
     const body = await request.json();
     const { phone, channel } = body;

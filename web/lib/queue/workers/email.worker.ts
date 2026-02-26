@@ -1,6 +1,7 @@
 import { Worker, Job as BullJob } from "bullmq";
 import { getRedisConnection } from "../connection";
 import { EMAIL_QUEUE } from "../queues";
+import { completeJob, failJob, startJob } from "../enqueue";
 
 export interface EmailJobData {
   jobId: string;
@@ -10,34 +11,22 @@ export interface EmailJobData {
 }
 
 async function processEmailJob(bull: BullJob<EmailJobData>): Promise<void> {
-  const { prisma } = await import("@/lib/prisma");
   const { sendEmail } = await import("@/lib/email");
 
   const { jobId, to, subject, html } = bull.data;
+  const attemptsMade = bull.attemptsMade + 1;
+  const maxAttempts = bull.opts.attempts ?? 3;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
-  });
+  await startJob(jobId, attemptsMade);
 
   const success = await sendEmail({ to, subject, html });
 
   if (!success) {
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: bull.attemptsMade + 1 >= (bull.opts.attempts ?? 3) ? "DEAD" : "FAILED",
-        failedAt: new Date(),
-        error: `Email delivery failed to ${to}`,
-      },
-    });
+    await failJob(jobId, `Email delivery failed to ${to}`, attemptsMade, maxAttempts);
     throw new Error(`Email delivery failed to ${to}`);
   }
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "COMPLETED", completedAt: new Date(), error: null },
-  });
+  await completeJob(jobId, { to, subject });
 }
 
 export function startEmailWorker(): Worker<EmailJobData> {

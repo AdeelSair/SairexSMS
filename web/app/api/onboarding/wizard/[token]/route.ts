@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 type RouteContext = {
   params: { token: string };
 };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
+  const blocked = applyRateLimit(request, "onboarding:wizard-read", RATE_LIMITS.QR_RESOLVE);
+  if (blocked) return blocked;
+
   try {
     const token = context.params.token;
     const draft = await prisma.onboardingDraft.findUnique({

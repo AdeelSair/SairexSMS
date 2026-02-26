@@ -7,6 +7,7 @@ import { generateUnitCode, generateCityCode, buildFullUnitPath } from "@/lib/uni
 import { createUnitProfile } from "@/lib/unit-profile";
 import { onboardingCompleteWizardSchema } from "@/lib/validations/onboarding-wizard";
 import { TRIAL_POLICY, createTrialWindow } from "@/lib/billing/pricing-architecture";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 type SchoolInfo = {
   schoolName: string;
@@ -75,6 +76,9 @@ async function buildUniqueAdminEmail(baseMobile: string): Promise<string> {
 }
 
 export async function POST(request: Request) {
+  const blocked = applyRateLimit(request, "onboarding:wizard-complete", RATE_LIMITS.LOGIN_ATTEMPT);
+  if (blocked) return blocked;
+
   try {
     const body = await request.json();
     const parsed = onboardingCompleteWizardSchema.safeParse(body);

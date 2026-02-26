@@ -36,6 +36,7 @@
 27. [Known Issues & Technical Debt](#27-known-issues--technical-debt)
 28. [Coding Standards (Enforced Rules)](#28-coding-standards-enforced-rules)
 29. [Phase 8 Completion + Phase 9 Revenue Optimization (Step 1)](#29-phase-8-completion--phase-9-revenue-optimization-step-1)
+30. [Production Release & Rollback Runbook](#30-production-release--rollback-runbook)
 
 ---
 
@@ -1564,6 +1565,90 @@ Use this mapping to avoid naming drift between internal entitlement logic and pu
 - `GET /api/billing/plan-usage` — plan, usage/limits, PKR student pricing range, trial state, and upgrade recommendation
 - `GET/PATCH /api/billing/config` — per-student fee and cycle config controls
 - `GET /api/organizations/mode` and `PATCH /api/organizations/mode` — SIMPLE/PRO mode control surface
+
+---
+
+## 30. Production Release & Rollback Runbook
+
+This section defines the minimum operational procedure for safe production deployments.
+
+### Ownership and Release Roles
+
+- **Release Captain (required):** owns final go/no-go and timeline.
+- **Backend Owner:** validates migrations, API health, workers, and queue stability.
+- **Frontend Owner:** validates critical UX routes and post-deploy smoke.
+- **QA Owner:** executes smoke checklist and records outcomes.
+
+No production deploy should start without all three roles assigned.
+
+### Pre-Deploy Checklist (Blocking)
+
+- [ ] `npm run lint` passes in `web/`
+- [ ] `npm run build` passes in `web/`
+- [ ] `npm test` passes in `web/`
+- [ ] CI workflow is green for target commit (`.github/workflows/ci.yml`)
+- [ ] Database backup/snapshot taken and timestamp recorded
+- [ ] Migration dry-run validated on staging/test data (if schema changed)
+- [ ] `REDIS_URL` is present for worker runtime
+- [ ] `WORKER_BOOTSTRAP_MODE` is explicitly set (`external` in production recommended)
+- [ ] Sentry DSN/org/project env values are present
+
+### Deployment Sequence (Canonical Order)
+
+1. **Freeze window starts** (no new merges to release branch)
+2. **Run pre-deploy checks** and capture evidence
+3. **Backup database**
+4. **Deploy API/app revision**
+5. **Run migrations** (`prisma migrate deploy`)
+6. **Start/confirm worker process** (`npm run worker` in worker service)
+7. **Verify `/api/health` and `/api/health?check=workers`**
+8. **Run post-deploy smoke checks**
+9. **Release captain signs off**
+
+### Post-Deploy Smoke Test (Mandatory)
+
+- [ ] `GET /api/health` => `ok` or expected `degraded` (with known reason)
+- [ ] `GET /api/health?check=workers` => workers check is `ok`
+- [ ] Login / OTP request + verify flow works
+- [ ] Password reset request + reset flow works
+- [ ] Webhook ingress endpoint accepts payload and worker processes it
+- [ ] Critical dashboard path loads (`/admin/dashboard` and `/mobile/dashboard`)
+- [ ] One write-path check (e.g., invite generation or attendance action) succeeds
+
+### Rollback Triggers (Immediate)
+
+Trigger rollback if any of the following occurs for more than 10 minutes after deploy:
+
+- `health.status = down`
+- worker check stays `down` and cannot be recovered quickly
+- spike in 5xx errors or auth failures beyond normal baseline
+- payment webhook processing failures are sustained
+- migration-related runtime errors affect core routes
+
+### Rollback Procedure
+
+1. Announce rollback start in release channel
+2. Shift traffic to previous stable app revision
+3. Keep workers aligned with rolled-back app version
+4. If migration is backward-compatible, retain DB state and verify app recovery
+5. If migration is not backward-compatible:
+   - restore DB snapshot taken pre-deploy
+   - re-apply previous stable migration state
+6. Re-run smoke tests on rolled-back version
+7. Record incident summary + corrective actions before next release
+
+### Release Evidence Template
+
+Store this in release notes or deployment ticket:
+
+- Release commit SHA:
+- Deploy start/end time:
+- DB backup timestamp:
+- Migration(s) applied:
+- Worker mode/config:
+- Smoke test results:
+- Sentry error delta (before/after):
+- Final decision: GO / ROLLBACK
 
 ---
 

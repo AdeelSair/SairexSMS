@@ -5,8 +5,12 @@ import {
   resolveQRInviteToken,
 } from "@/lib/adoption/qr-invite.service";
 import { prisma } from "@/lib/prisma";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
+  const blocked = applyRateLimit(request, "invite:resolve", RATE_LIMITS.QR_RESOLVE);
+  if (blocked) return blocked;
+
   try {
     const url = new URL(request.url);
     const tokenId = url.searchParams.get("token");

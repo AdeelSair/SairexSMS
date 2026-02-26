@@ -18,7 +18,12 @@ export class ManualAdapter implements PaymentGatewayAdapter {
     throw new Error("Manual payments do not use gateway sessions");
   }
 
-  verifyWebhook(): boolean {
+  verifyWebhook(
+    _payload: Record<string, unknown>,
+    _signature: string | null,
+    _headers: Record<string, string>,
+    _rawBody: string,
+  ): boolean {
     return false;
   }
 

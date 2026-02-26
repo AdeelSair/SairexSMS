@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireAuth, requireRole } from "@/lib/auth-guard";
 import { generateQRInviteToken } from "@/lib/adoption/qr-invite.service";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 const generateInviteSchema = z.object({
   role: z.enum(["PARENT", "STAFF"]),
@@ -12,6 +13,9 @@ const generateInviteSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const blocked = applyRateLimit(request, "invite:generate", RATE_LIMITS.API_GENERAL);
+  if (blocked) return blocked;
+
   const guard = await requireAuth();
   if (guard instanceof NextResponse) return guard;
 

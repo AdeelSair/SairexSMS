@@ -1,6 +1,7 @@
 import { Worker, Job as BullJob } from "bullmq";
 import { getRedisConnection } from "../connection";
 import { WHATSAPP_QUEUE } from "../queues";
+import { completeJob, failJob, startJob } from "../enqueue";
 
 export interface WhatsAppJobData {
   jobId: string;
@@ -9,44 +10,28 @@ export interface WhatsAppJobData {
 }
 
 async function processWhatsAppJob(bull: BullJob<WhatsAppJobData>): Promise<void> {
-  const { prisma } = await import("@/lib/prisma");
-
   const { jobId, to, message } = bull.data;
+  const attemptsMade = bull.attemptsMade + 1;
+  const maxAttempts = bull.opts.attempts ?? 3;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
-  });
+  await startJob(jobId, attemptsMade);
 
   try {
     const { sendWhatsAppMessage } = await import("@/lib/whatsapp");
     await sendWhatsAppMessage(to, message);
 
-    await prisma.job.update({
-      where: { id: jobId },
-      data: { status: "COMPLETED", completedAt: new Date(), error: null },
-    });
+    await completeJob(jobId, { to });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown WhatsApp error";
 
     // If WhatsApp client isn't initialized, log gracefully in dev
     if (errorMsg.includes("init") || errorMsg.includes("not ready")) {
       console.log(`[WhatsApp Worker] DEV MODE — WhatsApp → ${to}: ${message}`);
-      await prisma.job.update({
-        where: { id: jobId },
-        data: { status: "COMPLETED", completedAt: new Date(), error: null, result: { devMode: true } },
-      });
+      await completeJob(jobId, { to, devMode: true });
       return;
     }
 
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: bull.attemptsMade + 1 >= (bull.opts.attempts ?? 3) ? "DEAD" : "FAILED",
-        failedAt: new Date(),
-        error: errorMsg,
-      },
-    });
+    await failJob(jobId, errorMsg, attemptsMade, maxAttempts);
     throw new Error(`WhatsApp delivery failed to ${to}: ${errorMsg}`);
   }
 }

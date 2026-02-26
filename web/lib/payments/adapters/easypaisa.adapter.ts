@@ -46,6 +46,8 @@ export class EasypaisaAdapter implements PaymentGatewayAdapter {
   verifyWebhook(
     payload: Record<string, unknown>,
     signature: string | null,
+    _headers: Record<string, string>,
+    _rawBody: string,
   ): boolean {
     if (!signature || !this.config.secretKey) return false;
 

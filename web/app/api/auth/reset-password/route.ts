@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { hashPasswordResetToken } from "@/lib/auth/password-reset-token";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 // POST: Reset password using a token (unauthenticated)
 export async function POST(request: Request) {
+  const blocked = applyRateLimit(request, "auth:reset-password", RATE_LIMITS.LOGIN_ATTEMPT);
+  if (blocked) return blocked;
+
   try {
     const { token, newPassword } = await request.json();
 
@@ -21,10 +26,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find the token
-    const resetToken = await prisma.passwordResetToken.findUnique({
-      where: { token },
-      include: { user: true },
+    const tokenHash = hashPasswordResetToken(token);
+
+    // Lookup by hash (new storage) with plaintext fallback for in-flight old links.
+    const resetToken = await prisma.passwordResetToken.findFirst({
+      where: {
+        OR: [{ token: tokenHash }, { token }],
+      },
+      select: {
+        id: true,
+        userId: true,
+        expiresAt: true,
+        usedAt: true,
+      },
     });
 
     if (!resetToken) {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { enqueue, EMAIL_QUEUE } from "@/lib/queue";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { applyRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 /**
  * POST /api/auth/signup
@@ -14,6 +15,9 @@ import crypto from "crypto";
  * Organization creation happens later in the onboarding wizard (after email verification).
  */
 export async function POST(request: Request) {
+  const blocked = applyRateLimit(request, "auth:signup", RATE_LIMITS.LOGIN_ATTEMPT);
+  if (blocked) return blocked;
+
   try {
     const body = await request.json();
     const { name, email, password, inviteToken } = body;

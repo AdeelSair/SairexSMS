@@ -54,3 +54,7 @@ export function startWorkers(): void {
 
   logger.info({ totalQueues: 15 }, "All workers started");
 }
+
+export function areWorkersStarted(): boolean {
+  return started;
+}

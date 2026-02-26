@@ -35,9 +35,10 @@ export class StripeAdapter implements PaymentGatewayAdapter {
   }
 
   verifyWebhook(
-    payload: Record<string, unknown>,
+    _payload: Record<string, unknown>,
     signature: string | null,
     headers: Record<string, string>,
+    rawBody: string,
   ): boolean {
     if (!signature || !this.config.webhookSecret) return false;
 
@@ -54,7 +55,7 @@ export class StripeAdapter implements PaymentGatewayAdapter {
 
     if (!parts.timestamp || !parts.signature) return false;
 
-    const signedPayload = `${parts.timestamp}.${JSON.stringify(payload)}`;
+    const signedPayload = `${parts.timestamp}.${rawBody}`;
     const expected = createHmac("sha256", this.config.webhookSecret)
       .update(signedPayload)
       .digest("hex");

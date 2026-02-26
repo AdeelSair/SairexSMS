@@ -1,6 +1,7 @@
 import { Worker, Job as BullJob } from "bullmq";
 import { getRedisConnection } from "../connection";
 import { REPORT_QUEUE } from "../queues";
+import { completeJob, failJob, startJob } from "../enqueue";
 
 export interface ReportJobData {
   jobId: string;
@@ -13,14 +14,12 @@ export interface ReportJobData {
 
 async function processReportJob(bull: BullJob<ReportJobData>): Promise<void> {
   const { prisma } = await import("@/lib/prisma");
-  const { generateReportPdf } = await import("@/lib/pdf/report-pdf");
 
   const { jobId, reportType, organizationId, campusId, filters, generatedBy } = bull.data;
+  const attemptsMade = bull.attemptsMade + 1;
+  const maxAttempts = bull.opts.attempts ?? 3;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "PROCESSING", startedAt: new Date(), attempts: bull.attemptsMade + 1 },
-  });
+  await startJob(jobId, attemptsMade);
 
   try {
     const org = await prisma.organization.findUnique({
@@ -42,20 +41,10 @@ async function processReportJob(bull: BullJob<ReportJobData>): Promise<void> {
       throw new Error(`Unknown report type: ${reportType}`);
     }
 
-    await prisma.job.update({
-      where: { id: jobId },
-      data: { status: "COMPLETED", completedAt: new Date(), error: null, result: { pdfUrl, reportType } },
-    });
+    await completeJob(jobId, { pdfUrl, reportType });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown report error";
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: bull.attemptsMade + 1 >= (bull.opts.attempts ?? 3) ? "DEAD" : "FAILED",
-        failedAt: new Date(),
-        error: errorMsg,
-      },
-    });
+    await failJob(jobId, errorMsg, attemptsMade, maxAttempts);
     throw new Error(`Report generation failed: ${errorMsg}`);
   }
 }
