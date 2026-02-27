@@ -5,20 +5,21 @@ import { navigation } from "@/lib/config/theme";
 import { isSimpleMode, resolveOrganizationMode } from "@/lib/system/mode.service";
 import { prisma } from "@/lib/prisma";
 import { SystemSidebar } from "@/components/layout/system-sidebar";
+import { resolveOrganizationBrandingCapabilities } from "@/lib/billing/branding-capabilities.service";
 import { SidebarNav } from "./SidebarNav";
 import LogoutButton from "./LogoutButton";
 import { MobileSidebar } from "./MobileSidebar";
-import { ThemeToggle } from "./ThemeToggle";
-import { ModeToggleButton } from "./ModeToggleButton";
+import { SidebarScrollNav } from "./SidebarScrollNav";
+import packageJson from "../../package.json";
 
 const FOOTER_NAV_GROUPS = [
   {
     label: "",
     items: [
       {
-        label: "Change Password",
-        href: "/admin/change-password",
-        icon: "KeyRound",
+        label: "Settings",
+        href: "/admin/settings",
+        icon: "Settings",
       },
     ],
   },
@@ -53,13 +54,19 @@ export default async function AdminLayout({
   const orgMode = user.organizationId
     ? await resolveOrganizationMode(user.organizationId)
     : { mode: "PRO" as const, isSimple: false };
+  const branding = user.organizationId
+    ? await resolveOrganizationBrandingCapabilities(user.organizationId)
+    : null;
   const organizationBranding = user.organizationId
     ? await prisma.organization.findUnique({
         where: { id: user.organizationId },
         select: { logoUrl: true },
       })
     : null;
-  const tenantLogoUrl = organizationBranding?.logoUrl || "/sairex-logo.svg";
+  const tenantLogoUrl =
+    branding?.capabilities.customLogo && organizationBranding?.logoUrl
+      ? organizationBranding.logoUrl
+      : "/sairex-logo.svg";
   const simpleMode = isSimpleMode(orgMode.mode);
   const filteredNavigation = simpleMode
     ? navigation
@@ -69,6 +76,8 @@ export default async function AdminLayout({
         }))
         .filter((group) => group.items.length > 0)
     : navigation;
+
+  const appVersion = `v${packageJson.version}`;
 
   return (
     <div className="flex h-screen flex-col md:flex-row">
@@ -90,7 +99,6 @@ export default async function AdminLayout({
         <MobileSidebar
           groups={filteredNavigation}
           footerGroups={FOOTER_NAV_GROUPS}
-          userEmail={userEmail}
           userRole={userRole}
         />
       </header>
@@ -112,42 +120,40 @@ export default async function AdminLayout({
               <span className="text-sidebar-primary">SMS</span>
             </h1>
           </div>
-          <p className="mt-0.5 text-xs text-sidebar-foreground/50">
+          <p className="mt-0.5 text-xs font-semibold" style={{ color: "#39B54A" }}>
             {userRole} Console
           </p>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <SidebarNav groups={filteredNavigation} />
-        </nav>
+        <SidebarScrollNav groups={filteredNavigation} />
 
         {/* Footer: user info + actions */}
         <div className="space-y-1 border-t border-sidebar-border p-3">
-          <div className="px-3 py-2">
-            <p className="truncate text-sm font-medium text-sidebar-foreground">
-              {userEmail}
-            </p>
-            <p className="text-xs text-sidebar-foreground/50">{userRole}</p>
-          </div>
           <SidebarNav groups={FOOTER_NAV_GROUPS} />
           <LogoutButton />
-          {user.organizationId && (
-            <ModeToggleButton currentMode={orgMode.mode} />
-          )}
-          <div className="px-1 pt-2">
-            <ThemeToggle />
-          </div>
-          <p className="px-2 py-2 text-center text-xs text-sidebar-foreground/60">
-            Powered by <span className="font-semibold">Sairex Technologies</span>
-          </p>
         </div>
       </SystemSidebar>
 
-      {/* ── Main content area ───────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
-        {children}
-      </main>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* ── Main content area ───────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+          {children}
+        </main>
+
+        <footer
+          className="border-t border-sidebar-border px-4 py-2 text-xs font-semibold md:px-6"
+          style={{ backgroundColor: "#39B54A", color: "#0F2F57" }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <p className="truncate">
+              User: <span>{userEmail}</span>
+            </p>
+            <p className="text-center">Powered by SAIR Techonolgies</p>
+            <p className="shrink-0 text-right">{appVersion}</p>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }

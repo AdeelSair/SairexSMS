@@ -312,8 +312,23 @@
   }
 
   /* Step 9 safety mode: highlights unresolved hardcoded white backgrounds. */
+  .token-audit [class*="bg-white"] {
+    outline: 2px solid red;
+  }
+
+  /* Backward-compatible alias used during migration. */
   .token-debug [class*="bg-white"] {
     outline: 2px solid red;
+  }
+
+  /* Sidebar-specific scrollbar styling: no white track block. */
+  .sidebar-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }
 
