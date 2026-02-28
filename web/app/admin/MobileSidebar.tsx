@@ -1,29 +1,34 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Menu } from "lucide-react";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
-  SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
 import { SidebarNav } from "./SidebarNav";
 import LogoutButton from "./LogoutButton";
 import { SxButton } from "@/components/sx";
 import type { NavGroup } from "@/lib/config/theme";
+import { SIDEBAR_BOTTOM_COLOR } from "@/lib/theme/chrome-theme";
 
 interface MobileSidebarProps {
   groups: NavGroup[];
   footerGroups: NavGroup[];
   userRole: string;
+  tenantLogoUrl: string;
+  tenantName: string;
 }
 
 export function MobileSidebar({
   groups,
   footerGroups,
   userRole,
+  tenantLogoUrl,
+  tenantName,
 }: MobileSidebarProps) {
   const [open, setOpen] = useState(false);
 
@@ -47,13 +52,22 @@ export function MobileSidebar({
         >
           {/* Brand */}
           <SheetHeader className="border-b border-sidebar-border px-6 py-5">
-            <SheetTitle className="text-xl font-bold tracking-tight text-sidebar-foreground">
-              <span>SAIREX</span>{" "}
-              <span className="text-sidebar-primary">SMS</span>
-            </SheetTitle>
-            <SheetDescription className="text-xs font-semibold" style={{ color: "#39B54A" }}>
+            <div className="w-full">
+              <Image
+                src={tenantLogoUrl}
+                alt="Tenant logo"
+                width={320}
+                height={88}
+                className="h-auto w-full object-contain"
+                priority
+              />
+            </div>
+            <SheetDescription className="text-xs font-semibold" style={{ color: SIDEBAR_BOTTOM_COLOR }}>
               {userRole.replace("_", " ")} Console
             </SheetDescription>
+            <p className="truncate text-xs text-sidebar-foreground/80" title={tenantName}>
+              {tenantName}
+            </p>
           </SheetHeader>
 
           {/* Navigation — close sheet on link click */}

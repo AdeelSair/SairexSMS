@@ -6,6 +6,12 @@ import { isSimpleMode, resolveOrganizationMode } from "@/lib/system/mode.service
 import { prisma } from "@/lib/prisma";
 import { SystemSidebar } from "@/components/layout/system-sidebar";
 import { resolveOrganizationBrandingCapabilities } from "@/lib/billing/branding-capabilities.service";
+import {
+  SIDEBAR_MID_COLOR,
+  SIDEBAR_BOTTOM_COLOR,
+  ADMIN_TOP_BAR_PADDING_Y_PX,
+  getAdminChromeColors,
+} from "@/lib/theme/chrome-theme";
 import { SidebarNav } from "./SidebarNav";
 import LogoutButton from "./LogoutButton";
 import { MobileSidebar } from "./MobileSidebar";
@@ -41,6 +47,7 @@ export default async function AdminLayout({
     role?: string;
     platformRole?: string | null;
     organizationId?: string | null;
+    campusId?: number | null;
   };
 
   // Redirect to onboarding if user has no org and isn't a platform admin
@@ -60,13 +67,28 @@ export default async function AdminLayout({
   const organizationBranding = user.organizationId
     ? await prisma.organization.findUnique({
         where: { id: user.organizationId },
-        select: { logoUrl: true },
+        select: { logoUrl: true, displayName: true, organizationName: true },
       })
     : null;
   const tenantLogoUrl =
     branding?.capabilities.customLogo && organizationBranding?.logoUrl
       ? organizationBranding.logoUrl
-      : "/sairex-logo.svg";
+      : "/sairex-logo.png";
+  const tenantName =
+    organizationBranding?.displayName?.trim() ||
+    organizationBranding?.organizationName?.trim() ||
+    "SAIREX SMS";
+  const campusName = user.organizationId && user.campusId
+    ? (await prisma.campus.findFirst({
+        where: {
+          id: user.campusId,
+          organizationId: user.organizationId,
+        },
+        select: { name: true },
+      }))?.name ?? "All Campuses"
+    : user.organizationId
+      ? "All Campuses"
+      : "Global";
   const simpleMode = isSimpleMode(orgMode.mode);
   const filteredNavigation = simpleMode
     ? navigation
@@ -77,29 +99,35 @@ export default async function AdminLayout({
         .filter((group) => group.items.length > 0)
     : navigation;
 
+  const {
+    topBarBackgroundColor,
+    bottomBarBackgroundColor,
+    topBarTextColor,
+    bottomBarTextColor,
+  } = getAdminChromeColors();
+
   const appVersion = `v${packageJson.version}`;
 
   return (
     <div className="flex h-screen flex-col md:flex-row">
       {/* ── Mobile top bar ──────────────────────────────────── */}
       <header className="flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 py-3 md:hidden">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center">
           <Image
             src={tenantLogoUrl}
             alt="Tenant logo"
-            width={24}
-            height={24}
-            className="rounded-sm bg-background/90 p-0.5"
+            width={168}
+            height={44}
+            className="h-11 w-auto object-contain"
+            priority
           />
-          <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">
-            <span>SAIREX</span>{" "}
-            <span className="text-sidebar-primary">SMS</span>
-          </h1>
         </div>
         <MobileSidebar
           groups={filteredNavigation}
           footerGroups={FOOTER_NAV_GROUPS}
           userRole={userRole}
+          tenantLogoUrl={tenantLogoUrl}
+          tenantName={tenantName}
         />
       </header>
 
@@ -107,21 +135,21 @@ export default async function AdminLayout({
       <SystemSidebar className="hidden w-64 flex-col border-r border-sidebar-border md:flex">
         {/* Brand */}
         <div className="border-b border-sidebar-border px-6 py-5">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 w-full">
             <Image
               src={tenantLogoUrl}
               alt="Tenant logo"
-              width={28}
-              height={28}
-              className="rounded-sm bg-background/90 p-0.5"
+              width={320}
+              height={88}
+              className="h-auto w-full object-contain"
+              priority
             />
-            <h1 className="text-xl font-bold tracking-tight">
-              <span className="text-sidebar-foreground">SAIREX</span>{" "}
-              <span className="text-sidebar-primary">SMS</span>
-            </h1>
           </div>
-          <p className="mt-0.5 text-xs font-semibold" style={{ color: "#39B54A" }}>
+          <p className="mt-0.5 text-xs font-semibold" style={{ color: SIDEBAR_BOTTOM_COLOR }}>
             {userRole} Console
+          </p>
+          <p className="mt-1 truncate text-xs text-sidebar-foreground/80" title={tenantName}>
+            {tenantName}
           </p>
         </div>
 
@@ -136,6 +164,35 @@ export default async function AdminLayout({
       </SystemSidebar>
 
       <div className="flex min-h-0 flex-1 flex-col">
+        <div
+          className="border-b px-4 md:px-6"
+          style={{
+            backgroundColor: topBarBackgroundColor,
+            borderColor: SIDEBAR_MID_COLOR,
+            color: topBarTextColor,
+            paddingTop: `${ADMIN_TOP_BAR_PADDING_Y_PX}px`,
+            paddingBottom: `${ADMIN_TOP_BAR_PADDING_Y_PX}px`,
+          }}
+        >
+          <div className="grid grid-cols-3 items-center gap-2">
+            <p className="truncate text-xs md:text-sm">
+              Organization: <span className="font-semibold">{tenantName}</span>
+            </p>
+            <p className="truncate text-center text-xs md:text-sm">
+              Campus: <span className="font-semibold">{campusName}</span>
+            </p>
+            <div className="flex justify-end">
+              <Image
+                src={tenantLogoUrl}
+                alt="Tenant logo"
+                width={128}
+                height={32}
+                className="h-8 w-auto object-contain"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* ── Main content area ───────────────────────────────── */}
         <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
           {children}
@@ -143,7 +200,7 @@ export default async function AdminLayout({
 
         <footer
           className="border-t border-sidebar-border px-4 py-2 text-xs font-semibold md:px-6"
-          style={{ backgroundColor: "#39B54A", color: "#0F2F57" }}
+          style={{ backgroundColor: bottomBarBackgroundColor, color: bottomBarTextColor }}
         >
           <div className="flex items-center justify-between gap-4">
             <p className="truncate">

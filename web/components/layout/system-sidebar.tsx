@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { SIDEBAR_GRADIENT } from "@/lib/theme/chrome-theme";
 
 export function SystemSidebar(props: {
   children: React.ReactNode;
@@ -8,8 +9,7 @@ export function SystemSidebar(props: {
     <aside
       className={cn("text-white", props.className)}
       style={{
-        background:
-          "linear-gradient(180deg, #0F2F57 0%, #1D4E89 40%, #1FA2A6 75%, #39B54A 100%)",
+        background: SIDEBAR_GRADIENT,
       }}
     >
       {props.children}
