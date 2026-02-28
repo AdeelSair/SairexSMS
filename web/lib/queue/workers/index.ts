@@ -10,6 +10,7 @@ import { startImportWorker } from "./import.worker";
 import { startFinanceWorker } from "./finance.worker";
 import { startPromotionWorker } from "./promotion.worker";
 import { startReminderWorker } from "./reminder.worker";
+import { startSchedulerWorker, registerReminderDailySchedule } from "./scheduler.worker";
 import { startSystemWorker } from "./system.worker";
 import { startEventHandlerWorker } from "./event-handler.worker";
 import { startWebhookWorker } from "./webhook.worker";
@@ -41,6 +42,7 @@ export function startWorkers(): void {
   startFinanceWorker();
   startPromotionWorker();
   startReminderWorker();
+  startSchedulerWorker();
   startReportWorker();
 
   /* Payment gateway webhook worker */
@@ -52,7 +54,11 @@ export function startWorkers(): void {
   /* System maintenance worker */
   startSystemWorker();
 
-  logger.info({ totalQueues: 15 }, "All workers started");
+  void registerReminderDailySchedule().catch((error) => {
+    logger.error({ error }, "Failed to register reminder daily schedule");
+  });
+
+  logger.info({ totalQueues: 16 }, "All workers started");
 }
 
 export function areWorkersStarted(): boolean {

@@ -6,8 +6,9 @@ generator client {
 }
 
 generator jsClient {
-  provider = "prisma-client-js"
-  output   = "../web/lib/generated/prisma"
+  provider      = "prisma-client-js"
+  output        = "../web/lib/generated/prisma"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -1623,6 +1624,7 @@ model ReminderLog {
   challan      FeeChallan?  @relation(fields: [challanId], references: [id])
   reminderRule ReminderRule @relation(fields: [reminderRuleId], references: [id])
 
+  @@unique([organizationId, challanId, reminderRuleId])
   @@index([studentId, reminderRuleId, sentAt])
   @@index([externalRef])
   @@index([organizationId])

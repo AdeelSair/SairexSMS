@@ -113,6 +113,7 @@ export const navigation: NavGroup[] = [
       { label: "Students", href: "/admin/students", icon: "GraduationCap" },
       { label: "Payments", href: "/admin/payments", icon: "HandCoins" },
       { label: "Fee Module", href: "/admin/finance", icon: "Wallet" },
+      { label: "Reminders", href: "/admin/reminders", icon: "ScrollText", proOnly: true },
       { label: "Finance Dashboard", href: "/admin/finance/dashboard", icon: "BarChart3", proOnly: true },
       { label: "Monthly Posting", href: "/admin/finance/posting", icon: "CalendarClock", proOnly: true },
     ],
@@ -128,6 +129,7 @@ export const navigation: NavGroup[] = [
   {
     label: "System",
     items: [
+      { label: "Queues", href: "/admin/queues", icon: "Activity", proOnly: true },
       { label: "Job Monitor", href: "/admin/jobs", icon: "Activity", proOnly: true },
     ],
   },

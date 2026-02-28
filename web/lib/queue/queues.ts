@@ -12,6 +12,7 @@ const QUEUE_DEFAULTS: Record<string, QueueOverrides> = {
   finance: { attempts: 2, backoff: { type: "fixed", delay: 5000 } },
   promotion: { attempts: 1 },
   reminder: { attempts: 5, backoff: { type: "exponential", delay: 3000 } },
+  scheduler: { attempts: 1 },
   system: { attempts: 2, backoff: { type: "fixed", delay: 10000 } },
 };
 
@@ -50,6 +51,7 @@ export const IMPORT_QUEUE = "import";
 export const FINANCE_QUEUE = "finance";
 export const PROMOTION_QUEUE = "promotion";
 export const REMINDER_QUEUE = "reminder";
+export const SCHEDULER_QUEUE = "scheduler";
 export const SYSTEM_QUEUE = "system";
 
 /* ── Payment gateway queue ─────────────────────────────── */

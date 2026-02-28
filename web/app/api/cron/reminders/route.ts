@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { notifyParent } from "@/lib/notifications";
-import { requireAuth, requireRole } from "@/lib/auth-guard";
-import { scopeFilter } from "@/lib/tenant";
+import { requireAuth, requireRole, isSuperAdmin } from "@/lib/auth-guard";
+import { enqueue, REMINDER_QUEUE } from "@/lib/queue";
 
 /**
  * GET /api/cron/reminders
  *
- * Finds all UNPAID challans due in 3 days and enqueues a NOTIFICATION
- * job for each. Returns immediately — actual delivery is async.
+ * Manual fallback trigger for reminder runs.
+ * Primary daily execution is handled by the scheduler worker.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const guard = await requireAuth();
   if (guard instanceof NextResponse) return guard;
 
@@ -18,36 +16,32 @@ export async function GET() {
   if (denied) return denied;
 
   try {
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + 3);
+    const { searchParams } = new URL(request.url);
+    const orgId = isSuperAdmin(guard)
+      ? (searchParams.get("orgId") ?? guard.organizationId)
+      : guard.organizationId;
 
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const where = {
-      ...scopeFilter(guard, { hasCampus: true }),
-      status: "UNPAID",
-      dueDate: { gte: startOfDay, lte: endOfDay },
-    };
-
-    const pendingChallans = await prisma.feeChallan.findMany({
-      where,
-      include: { student: true },
-    });
-
-    const jobIds: string[] = [];
-
-    for (const challan of pendingChallans) {
-      const jobId = await notifyParent(challan.student, challan, "REMINDER");
-      jobIds.push(jobId);
+    if (!orgId) {
+      return NextResponse.json({ error: "Organization context required" }, { status: 400 });
     }
 
+    const dateKey = new Date().toISOString().slice(0, 10);
+    const jobId = await enqueue({
+      type: "REMINDER_RUN",
+      queue: REMINDER_QUEUE,
+      organizationId: orgId,
+      userId: guard.userId,
+      payload: { organizationId: orgId },
+      maxAttempts: 5,
+      idempotencyKey: `cron-reminder-run:${orgId}:${dateKey}`,
+    });
+
     return NextResponse.json({
-      message: `Enqueued ${jobIds.length} reminder notification(s)`,
-      count: jobIds.length,
-      jobIds,
+      ok: true,
+      data: {
+        jobId,
+        enqueued: true,
+      },
     });
   } catch (error) {
     console.error("Cron reminder error:", error);

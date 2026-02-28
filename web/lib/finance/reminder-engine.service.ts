@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma, ReminderChannel, ReminderTriggerType } from "@/lib/generated/prisma";
+import { Prisma } from "@/lib/generated/prisma";
+import type { ReminderChannel, ReminderTriggerType } from "@/lib/generated/prisma";
 import { emit } from "@/lib/events";
+import { enqueue, REMINDER_QUEUE } from "@/lib/queue";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -31,6 +33,27 @@ interface TargetChallan {
   daysDelta: number;
   student: { fullName: string; admissionNo: string; grade: string };
   campus: { name: string };
+}
+
+function isReminderLogDuplicateError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+async function createReminderLogSafely(
+  data: Prisma.ReminderLogCreateInput,
+): Promise<{ created: true; logId: string } | { created: false }> {
+  try {
+    const log = await prisma.reminderLog.create({
+      data,
+      select: { id: true },
+    });
+    return { created: true, logId: log.id };
+  } catch (error) {
+    if (isReminderLogDuplicateError(error)) {
+      return { created: false };
+    }
+    throw error;
+  }
 }
 
 /* ── Template Renderer ──────────────────────────────────── */
@@ -273,28 +296,42 @@ async function trySendReminder(
   };
 
   const messageBody = renderTemplate(template, templateVars);
+  const reminderLogData: Prisma.ReminderLogCreateInput = {
+    organization: { connect: { id: organizationId } },
+    student: { connect: { id: challan.studentId } },
+    challan: { connect: { id: challan.id } },
+    reminderRule: { connect: { id: rule.id } },
+    channel: rule.channel,
+    triggerType: rule.triggerType,
+    status: "SENT",
+    messageBody,
+    paymentLink,
+  };
 
   try {
-    await enqueueReminderJob(organizationId, {
-      channel: rule.channel,
-      studentId: challan.studentId,
-      challanId: challan.id,
-      messageBody,
-    });
+    const logResult = await createReminderLogSafely(reminderLogData);
+    if (!logResult.created) return false;
 
-    await prisma.reminderLog.create({
-      data: {
-        organizationId,
+    try {
+      await enqueueReminderJob(organizationId, {
+        channel: rule.channel,
         studentId: challan.studentId,
         challanId: challan.id,
-        reminderRuleId: rule.id,
-        channel: rule.channel,
-        triggerType: rule.triggerType,
-        status: "SENT",
         messageBody,
-        paymentLink,
-      },
-    });
+      });
+    } catch (enqueueError) {
+      const enqueueErrorMessage = enqueueError instanceof Error
+        ? enqueueError.message
+        : "Failed to enqueue reminder delivery";
+      await prisma.reminderLog.update({
+        where: { id: logResult.logId },
+        data: {
+          status: "FAILED",
+          errorDetail: enqueueErrorMessage,
+        },
+      }).catch(() => {});
+      throw enqueueError;
+    }
 
     processed.add(dedupeKey);
     result.sent++;
@@ -302,19 +339,17 @@ async function trySendReminder(
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : "Unknown error";
 
-    await prisma.reminderLog.create({
-      data: {
-        organizationId,
-        studentId: challan.studentId,
-        challanId: challan.id,
-        reminderRuleId: rule.id,
-        channel: rule.channel,
-        triggerType: rule.triggerType,
-        status: "FAILED",
-        messageBody,
-        paymentLink,
-        errorDetail: errMsg,
-      },
+    await createReminderLogSafely({
+      organization: { connect: { id: organizationId } },
+      student: { connect: { id: challan.studentId } },
+      challan: { connect: { id: challan.id } },
+      reminderRule: { connect: { id: rule.id } },
+      channel: rule.channel,
+      triggerType: rule.triggerType,
+      status: "FAILED",
+      messageBody,
+      paymentLink,
+      errorDetail: errMsg,
     }).catch(() => {});
 
     result.failed++;
@@ -458,26 +493,42 @@ export async function triggerPartialPaymentReminder(
     daysOverdue: 0,
   });
 
-  await enqueueReminderJob(organizationId, {
+  const logResult = await createReminderLogSafely({
+    organization: { connect: { id: organizationId } },
+    student: { connect: { id: challan.studentId } },
+    challan: { connect: { id: challan.id } },
+    reminderRule: { connect: { id: rule.id } },
     channel: rule.channel,
-    studentId: challan.studentId,
-    challanId: challan.id,
+    triggerType: "PARTIAL_PAYMENT",
+    status: "SENT",
     messageBody,
+    paymentLink,
   });
 
-  await prisma.reminderLog.create({
-    data: {
-      organizationId,
+  if (!logResult.created) {
+    return;
+  }
+
+  try {
+    await enqueueReminderJob(organizationId, {
+      channel: rule.channel,
       studentId: challan.studentId,
       challanId: challan.id,
-      reminderRuleId: rule.id,
-      channel: rule.channel,
-      triggerType: "PARTIAL_PAYMENT",
-      status: "SENT",
       messageBody,
-      paymentLink,
-    },
-  });
+    });
+  } catch (enqueueError) {
+    const enqueueErrorMessage = enqueueError instanceof Error
+      ? enqueueError.message
+      : "Failed to enqueue reminder delivery";
+    await prisma.reminderLog.update({
+      where: { id: logResult.logId },
+      data: {
+        status: "FAILED",
+        errorDetail: enqueueErrorMessage,
+      },
+    }).catch(() => {});
+    throw enqueueError;
+  }
 }
 
 /* ── Delivery Status Update ───────────────────────────── */
@@ -513,22 +564,18 @@ async function enqueueReminderJob(
     messageBody: string;
   },
 ) {
-  const jobType = payload.channel === "EMAIL" ? "EMAIL"
-    : payload.channel === "WHATSAPP" ? "WHATSAPP"
-    : "SMS";
-
-  await prisma.job.create({
-    data: {
-      type: jobType,
-      queue: "reminders",
+  await enqueue({
+    type: "REMINDER_DELIVERY",
+    queue: REMINDER_QUEUE,
+    organizationId,
+    priority: 5,
+    maxAttempts: 5,
+    payload: {
       organizationId,
-      payload: {
-        studentId: payload.studentId,
-        challanId: payload.challanId,
-        channel: payload.channel,
-        messageBody: payload.messageBody,
-      },
-      priority: 5,
+      studentId: payload.studentId,
+      challanId: payload.challanId,
+      channel: payload.channel,
+      messageBody: payload.messageBody,
     },
   });
 }

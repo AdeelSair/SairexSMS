@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireAuth, requireRole, isSuperAdmin } from "@/lib/auth-guard";
 import {
-  runReminderEngine,
   getReminderStats,
-  type ReminderScope,
 } from "@/lib/finance/reminder-engine.service";
+import { enqueue, REMINDER_QUEUE } from "@/lib/queue";
 
 /**
  * POST /api/finance/reminders
  *
- * Trigger the reminder engine for the authenticated user's scope.
+ * Trigger a reminder run job for the authenticated user's scope.
  * Restricted to ORG_ADMIN+ roles.
  */
 export async function POST(request: Request) {
@@ -30,24 +29,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Organization context required" }, { status: 400 });
     }
 
-    const scope: ReminderScope = { organizationId: orgId };
+    const payload: {
+      organizationId: string;
+      unitPath?: string;
+      campusId?: number;
+    } = { organizationId: orgId };
 
     if (!isSuperAdmin(guard) && guard.role !== "ORG_ADMIN" && guard.unitPath) {
-      scope.unitPath = guard.unitPath;
+      payload.unitPath = guard.unitPath;
     }
 
     const campusId = (body as Record<string, unknown>).campusId;
     if (typeof campusId === "number") {
-      scope.campusId = campusId;
+      payload.campusId = campusId;
     } else if (guard.campusId && guard.role === "CAMPUS_ADMIN") {
-      scope.campusId = guard.campusId;
+      payload.campusId = guard.campusId;
     }
 
-    const result = await runReminderEngine(scope);
+    const dateKey = new Date().toISOString().slice(0, 10);
+    const idempotencySuffix = payload.campusId
+      ? `campus-${payload.campusId}`
+      : payload.unitPath
+        ? `unit-${payload.unitPath}`
+        : "org";
+    const jobId = await enqueue({
+      type: "REMINDER_RUN",
+      queue: REMINDER_QUEUE,
+      organizationId: orgId,
+      userId: guard.userId,
+      payload: {
+        organizationId: orgId,
+        ...(payload.unitPath ? { unitPath: payload.unitPath } : {}),
+        ...(payload.campusId ? { campusId: payload.campusId } : {}),
+      },
+      maxAttempts: 5,
+      idempotencyKey: `manual-reminder-run:${orgId}:${idempotencySuffix}:${dateKey}`,
+    });
 
-    return NextResponse.json({ ok: true, data: result });
+    return NextResponse.json({ ok: true, data: { jobId, enqueued: true } }, { status: 202 });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Reminder engine failed";
+    const message = error instanceof Error ? error.message : "Failed to enqueue reminder run";
     console.error("Reminder engine error:", error);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
