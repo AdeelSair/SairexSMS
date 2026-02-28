@@ -1,6 +1,6 @@
 # SAIREX SMS — Full Project Blueprint (AI Reference)
 
-> **Last updated:** 2026-02-25
+> **Last updated:** 2026-02-26
 > **Purpose:** Canonical reference for any AI assistant continuing development on this project.
 
 ---
@@ -38,6 +38,8 @@
 29. [Phase 8 Completion + Phase 9 Revenue Optimization (Step 1)](#29-phase-8-completion--phase-9-revenue-optimization-step-1)
 30. [Production Release & Rollback Runbook](#30-production-release--rollback-runbook)
 31. [Step 9 Controlled Theme Migration Plan](#31-step-9-controlled-theme-migration-plan)
+32. [Theming Phase Complete + Governance Lock Roadmap](#32-theming-phase-complete--governance-lock-roadmap)
+33. [UI Governance Law (Enforced)](#33-ui-governance-law-enforced)
 
 ---
 
@@ -1953,6 +1955,61 @@ Next delivery options:
 - A — Implement Theme Governance Lock files (ESLint policy + PR template + blueprint enforcement section).
 - B — Wire plan-based tenant branding permissions (backend guard + UI capability switch).
 - C — Implement chart theme token system (dark mode + safe tenant accent mapping).
+
+## 33. UI Governance Law (Enforced)
+
+This section is the permanent UI law for token governance. New UI work must comply by default.
+
+### Token-Only Color System
+
+Hardcoded layout color utilities are forbidden.
+
+Never use:
+
+- `bg-white`
+- `text-gray-*`
+- `border-gray-*`
+- `bg-blue-*`
+
+Use only:
+
+- `bg-background` -> page roots
+- `bg-surface` -> cards and sections
+- `text-muted` -> secondary text
+- `border-border` -> dividers and boundaries
+- `bg-primary` -> primary actions only
+
+### Semantic System Colors (Platform Controlled)
+
+System semantic colors are reserved for state meaning and are not tenant-overridden.
+
+Use semantic colors for:
+
+- financial states
+- attendance states
+- risk/alert indicators
+
+Do not use tenant branding colors for any status meaning.
+
+### Tenant Branding Scope
+
+Tenant primary/accent colors are allowed only for:
+
+- primary buttons
+- active states
+- non-semantic highlights
+
+Tenant branding is not allowed for:
+
+- status semantics
+- analytics meaning colors
+- validation/error semantics
+
+### Enforcement Layers (Implemented)
+
+- **ESLint token enforcement:** `web/eslint.config.mjs` blocks hardcoded banned classes in `app/admin/**` and `components/**`.
+- **PR governance checklist:** `.github/pull_request_template.md` requires token compliance, semantic safety, and accessibility checks.
+- **CI gate:** `.github/workflows/ci.yml` runs `npm run lint` before build/test, and failures block merge.
 
 ---
 

@@ -1,8 +1,19 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const configDir = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "standalone",
+  turbopack: {
+    root: configDir,
+  },
+  typescript: {
+    // Docker build currently focuses on producing runnable images; type checks run separately in CI.
+    ignoreBuildErrors: process.env.DOCKER_BUILD === "1",
+  },
 };
 
 export default withSentryConfig(nextConfig, {

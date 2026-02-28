@@ -7,7 +7,7 @@ import {
 } from "@/lib/finance/payment-entry.service";
 
 type RouteContext = {
-  params: { studentId: string };
+  params: Promise<{ studentId: string }>;
 };
 
 export async function GET(request: Request, context: RouteContext) {
@@ -42,7 +42,7 @@ export async function GET(request: Request, context: RouteContext) {
       );
     }
 
-    const { studentId: studentIdRaw } = context.params;
+    const { studentId: studentIdRaw } = await context.params;
     const studentId = Number(studentIdRaw);
     if (!Number.isFinite(studentId) || studentId <= 0) {
       return NextResponse.json({ error: "Invalid studentId" }, { status: 400 });

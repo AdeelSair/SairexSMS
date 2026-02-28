@@ -2,9 +2,11 @@ import { prisma } from "@/lib/prisma";
 import type { PlanType } from "@/lib/generated/prisma";
 import { getOrganizationPlan } from "@/lib/feature-gate";
 import {
+  getBrandingCapabilities,
   publicPlanToPricingTier,
   recommendedPlanByStudentCount,
   toPublicPlan,
+  type BrandingCapabilities,
   type PublicPlanName,
 } from "@/lib/billing/pricing-architecture";
 
@@ -42,6 +44,7 @@ export interface PlanUsagePayload {
     simpleToProRecommended: boolean;
     reason: string | null;
   };
+  branding: BrandingCapabilities;
 }
 
 const DEFAULT_LIMITS_BY_PLAN: Record<PlanType, { students: number; campuses: number; staff: number }> = {
@@ -113,6 +116,7 @@ export async function getOrganizationPlanUsage(
 
   const plan = toPublicPlan(planType);
   const tier = publicPlanToPricingTier(plan);
+  const branding = getBrandingCapabilities(plan);
   const suggestedPlan = recommendedPlanByStudentCount(studentsCount);
   const organization = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -158,6 +162,7 @@ export async function getOrganizationPlanUsage(
         ? "Student growth suggests enabling PRO mode for predictive insights."
         : null,
     },
+    branding,
   };
 }
 

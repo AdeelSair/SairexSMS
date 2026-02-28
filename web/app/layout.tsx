@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { TenantThemeProvider } from "@/components/tenant-theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { resolveOrganizationBrandingCapabilities } from "@/lib/billing/branding-capabilities.service";
 import "./globals.css";
 
 const inter = Inter({
@@ -35,6 +36,9 @@ export default async function RootLayout({
   const session = await auth();
   const user = session?.user as { organizationId?: string | null } | undefined;
   const organizationId = user?.organizationId ?? null;
+  const branding = organizationId
+    ? await resolveOrganizationBrandingCapabilities(organizationId)
+    : null;
   const resolvedTheme = organizationId
     ? await prisma.organization.findUnique({
         where: { id: organizationId },
@@ -44,8 +48,13 @@ export default async function RootLayout({
         },
       })
     : null;
-  const initialPrimary = resolvedTheme?.primaryColor || "#1D4E89";
-  const initialAccent = resolvedTheme?.accentColor || "#39B54A";
+  const canUseCustomPrimary = branding?.capabilities.customPrimaryColor ?? false;
+  const initialPrimary = canUseCustomPrimary
+    ? (resolvedTheme?.primaryColor ?? "#1D4E89")
+    : "#1D4E89";
+  const initialAccent = canUseCustomPrimary
+    ? (resolvedTheme?.accentColor ?? "#39B54A")
+    : "#39B54A";
   const initialPrimaryForeground = "#FFFFFF";
 
   return (
@@ -64,7 +73,16 @@ export default async function RootLayout({
       >
         <AuthSessionProvider>
           <AppQueryProvider>
-            <TenantThemeProvider tenantTheme={resolvedTheme}>
+            <TenantThemeProvider
+              tenantTheme={
+                resolvedTheme
+                  ? {
+                      ...resolvedTheme,
+                      capabilities: { customPrimaryColor: canUseCustomPrimary },
+                    }
+                  : null
+              }
+            >
               <ThemeProvider
                 attribute="class"
                 defaultTheme="light"

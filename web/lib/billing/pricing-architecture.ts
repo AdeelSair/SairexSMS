@@ -2,6 +2,13 @@ import type { PlanType } from "@/lib/generated/prisma";
 
 export type PublicPlanName = "STARTER" | "PROFESSIONAL" | "ENTERPRISE";
 
+export type BrandingCapabilities = {
+  customLogo: boolean;
+  customPrimaryColor: boolean;
+  customLoginTheme: boolean;
+  removePoweredBy: boolean;
+};
+
 export interface PricingTierDefinition {
   plan: PublicPlanName;
   studentBand: { min: number; max: number | null };
@@ -59,6 +66,34 @@ export const PAKISTAN_PRICING_ARCHITECTURE: PricingTierDefinition[] = [
   },
 ];
 
+const BRANDING_CAPABILITIES_BY_PLAN: Record<PublicPlanName, BrandingCapabilities> = {
+  STARTER: {
+    customLogo: false,
+    customPrimaryColor: false,
+    customLoginTheme: false,
+    removePoweredBy: false,
+  },
+  PROFESSIONAL: {
+    customLogo: true,
+    customPrimaryColor: true,
+    customLoginTheme: false,
+    removePoweredBy: false,
+  },
+  ENTERPRISE: {
+    customLogo: true,
+    customPrimaryColor: true,
+    customLoginTheme: true,
+    removePoweredBy: true,
+  },
+};
+
+export const BRANDING_PLAN_MATRIX = Object.entries(BRANDING_CAPABILITIES_BY_PLAN).map(
+  ([plan, capabilities]) => ({
+    plan: plan as PublicPlanName,
+    ...capabilities,
+  }),
+);
+
 export const TRIAL_POLICY = {
   days: 30,
   fullFeature: true,
@@ -76,6 +111,10 @@ export function publicPlanToPricingTier(plan: PublicPlanName): PricingTierDefini
   const found = PAKISTAN_PRICING_ARCHITECTURE.find((tier) => tier.plan === plan);
   if (found) return found;
   return PAKISTAN_PRICING_ARCHITECTURE[0];
+}
+
+export function getBrandingCapabilities(plan: PublicPlanName): BrandingCapabilities {
+  return BRANDING_CAPABILITIES_BY_PLAN[plan];
 }
 
 export function recommendedPlanByStudentCount(studentCount: number): PublicPlanName {
